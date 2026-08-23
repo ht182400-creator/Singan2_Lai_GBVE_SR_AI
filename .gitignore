@@ -39,3 +39,7 @@ data/ZAR/2A_DA_111017_115542.dat
 
 # Temp analysis/export file (excluded)
 请仔细阅读*
+# Session export dumps (very large, excluded)
+Singan2项目构架解读_*.json
+*构架解读_*.json
+*.json.bak
