@@ -13,23 +13,23 @@ body {
   -webkit-font-smoothing: subpixel-antialiased;
 }
 
-/* 主窗口：1700 × 1050（用户认可左侧 900 宽，整体放大适配视口） */
+/* 主窗口：1800 × 1050（用户认可左侧 900 宽；右侧再扩宽 100 → right-area 900，整体放大适配视口） */
 .main-window {
   position: relative;
   left: 0; top: 0;
-  width: 1700px;
+  width: 1800px;
   height: 1050px;
   background: #c0c0c0;
   border: 1px solid #555;
   overflow: hidden;
-  transform: scale(min(100vw / 1700px, 100vh / 1050px));
+  transform: scale(min(100vw / 1800px, 100vh / 1050px));
   transform-origin: top left;
 }
 
 /* === Top Menu Bar (22–44) === */
 .top-menu {
   position: absolute; left: 0; top: 22px;
-  width: 1700px; height: 22px;
+  width: 1800px; height: 22px;
   background: #ece9d8;
   border-bottom: 1px solid #888;
   display: flex; align-items: center; padding-left: 4px;
@@ -38,7 +38,7 @@ body {
 /* === Title Bar (0–22) === */
 .title-bar {
   position: absolute; left: 0; top: 0;
-  width: 1700px; height: 22px;
+  width: 1800px; height: 22px;
   background: #ece9d8;
   border-bottom: 1px solid #888;
   display: flex; align-items: center;
@@ -132,32 +132,57 @@ body {
   border: 1px solid #555;
   overflow: hidden;
 }
-/* === 右侧区：left900, 宽800；内部 .rc-* 局部 left 用 rcX-900 折算 === */
+/* === 右侧区：left900, 宽900, 高956（2026-08-23 高扩至与主画布底 1000 对齐；
+ * 2026-08-23 再次上提 top 88→44，与左侧 Channel Tab / abs(IR-Gp) 按钮行顶部对齐） === */
 .right-area {
   position: absolute;
-  left: 900px; top: 88px;
-  width: 800px;
-  height: 682px;
+  left: 900px; top: 44px;
+  width: 900px;
+  height: 956px;
   background: #ece9d8;
   overflow: hidden;
 }
-/* === 所有右侧子面板：绝对定位，坐标对应 .rc（已换算 left=rcX-900，right-area 起点 X900） === */
-.rc { position: absolute; }
-.rc-mouse-point { left: 0px; top: 1px; width: 150px; }    /* rc 631,1 → clamp 到 X900 起点 */
-.rc-reduction-1 { left: 201px; top: 2px; width: 79px; z-index: 5; }   /* rc 1101,2 */
-.rc-reduction-2 { left: 282px; top: 2px; width: 79px; z-index: 5; }   /* rc 1182,2 */
-.rc-image-processing { left: 0px; top: 77px; width: 290px; } /* rc 630,77 → clamp X900 */
-.rc-validation { left: 0px; top: 216px; width: 290px; }  /* rc 630,216 */
-.rc-operation { left: 0px; top: 350px; width: 290px; }   /* rc 630,350 */
-.rc-notes { left: 0px; top: 530px; width: 290px; }       /* rc 630,530 */
-.rc-th-row { left: 0px; top: 570px; width: 290px; }      /* rc 630,570 */
-.rc-make-graph { left: 0px; top: 341px; width: 380px; }  /* rc 630,341 */
-.rc-statistics { left: 0px; top: 342px; width: 360px; } /* rc 892,342 → clamp X900 */
-.rc-graph-file { left: 97px; top: 265px; width: 390px; } /* rc 997,265 */
-.rc-graph1 { left: 168px; top: 361px; width: 185px; height: 128px; } /* rc 1068,361 */
-.rc-graph2 { left: 168px; top: 492px; width: 186px; height: 139px; } /* rc 1068,492 */
-.rc-s2chart { left: 361px; top: 361px; width: 130px; height: 270px; } /* 相对 graph1 右侧 */
-.rc-right-end { left: 16px; top: 16px; width: 484px; }   /* rc 916,16 最右端大区 */
+/* === 所有右侧子面板：绝对定位，坐标对应 resource.rc ===
+ * 折算公式（唯一权威）：原版右侧起点 X=613；Web right-area 宽 900 = 原版右侧宽 666 × 1.201（2026-08-23 扩宽）
+ *   left = (rcX - 613) × 1.201 （水平）
+ *   top  = rcY × V_SCALE ；V_SCALE = 912 / 682 ≈ 1.337（2026-08-23 右列高 682→912，纵向等比拉伸填满）
+ *   width 按 ×1.201 折算；固定高度的面板（graph1/2、s2chart、vtb）高度同步 ×1.337 保持原版相对间距
+ * 注：旧版 left=rcX-900 / 垂直 1:1 已废弃；本次纵向拉伸是为消除右列上下空白，相对布局比例不变。 */
+.rc { position: absolute; cursor: move; }
+.rc legend, .rc .op-history-head, .rc .gasoti-panel legend, .rc .result-details legend, .rc .val-compact legend { cursor: move; }
+.rc input, .rc textarea, .rc select, .rc button, .rc label { cursor: auto; }
+.rc input, .rc textarea { cursor: text; }
+.rc button { cursor: pointer; }
+.rc-mouse-point { left: 22px; top: 0px; width: 96px; }        /* rc 631,1 (GB 80→96)；2026-08-23 内容上提置顶 */
+.rc-reduction-1 { left: 586px; top: 3px; width: 97px; z-index: 5; }    /* rc 1101,2 (GB 81→97) */
+.rc-reduction-2 { left: 683px; top: 3px; width: 102px; z-index: 5; }   /* rc 1182,2 (GB 85→102) */
+.rc-image-processing { left: 20px; top: 103px; width: 340px; }   /* rc 630,77 (GB 283→340) */
+.rc-validation { left: 20px; top: 264px; width: 444px; padding-bottom: 40px; }        /* rc 630,216 (到 ~887) */
+/* 红框区域组件：整体紧凑上移，贴合原始 UI 相对布局 */
+.rc-gasoti { left: 19px; top: 390px; width: 453px; padding-bottom: 20px; }
+.rc-graph-file { left: 461px; top: 350px; width: 307px; }       /* 与 GASOTI 同排 */
+.rc-make-graph { left: 20px; top: 500px; width: 453px; }
+.rc-statistics { left: 485px; top: 395px; width: 158px; }       /* 与 Make Graph 同排 */
+.rc-operation { left: 220px; top: 585px; width: 340px; }         /* 紧贴 MakeGraph */
+.rc-graph1 { left: 547px; top: 475px; width: 185px; height: 140px; }
+.rc-graph2 { left: 547px; top: 620px; width: 186px; height: 140px; }
+.rc-graph-plot { left: 20px; top: 540px; width: 500px; height: 250px; z-index: 6; }
+.graph-plot { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #fff; font-size: 10px; }
+.gp-header { display: flex; justify-content: space-between; gap: 6px; padding: 1px 4px; border-bottom: 1px solid #999; font-family: monospace; white-space: nowrap; }
+.gp-body { flex: 1; display: flex; min-height: 0; }
+.gp-svg { flex: 1; width: auto; height: 100%; background: #fff; }
+.gp-stats { width: 150px; padding: 2px 4px; font-family: monospace; border-left: 1px solid #ccc; white-space: nowrap; }
+.rc-s2chart { left: 732px; top: 475px; width: 68px; height: 285px; }     /* 与 Graph1 顶部对齐 */
+.rc-notes { left: 220px; top: 770px; width: 340px; }             /* 贴合 Operation */
+.rc-th-row { left: 20px; top: 700px; width: 340px; }            /* 贴合 Notes */
+.rc-result { left: 380px; top: 775px; width: 420px; }         /* 移至 Graph2 下方中央 */
+
+/* 原版真实存在但曾被误删的区域（resource.rc 证实） */
+.rc-vtb { left: 362px; top: 197px; width: 438px; height: 161px; }  /* rc 915,147 VTB 区 (右对齐至 800) */
+.rc-atb { left: 364px; top: 5px; width: 217px; }                /* rc 917,4 ATB 区 (181→217) */
+.rc-op-history { left: 122px; top: 8px; width: 237px; }         /* rc 714,6 Operation History (197→237) */
+.op-history-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
+.op-history-list { width: 100%; height: 54px; font-size: 10px; }
 .graph-black-edit {
   width: 100%; height: 100%; box-sizing: border-box;
   background: #1a1a1a; color: #c8c8c8; border: 1px solid #000;
@@ -237,19 +262,21 @@ fieldset legend {
   font-weight: 700; padding: 0 4px;
 }
 
-/* Mouse Point Compact */
-.mp-compact { padding: 3px 6px; }
-.mp-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-.mp-row label { display: inline-flex; gap: 2px; align-items: center; }
-.mp-row2 { display: flex; align-items: center; gap: 4px; font-size: 10px; }
-.mp-num { width: 40px; padding: 1px; font-size: 11px; }
+/* Mouse Point Compact（2026-08-23 改为纵向紧凑堆叠，避免 96px 宽度内平铺导致溢出到 Operation History） */
+.mp-compact { padding: 2px 4px; display: flex; flex-direction: column; gap: 2px; }
+.mp-compact legend { font-size: 10px; padding: 0 2px; }
+.mp-row { display: flex; align-items: center; gap: 3px; }
+.mp-row .btn-xs { padding: 1px 4px; font-size: 9px; min-width: 0; }
+.mp-input-row { display: flex; align-items: center; gap: 3px; font-size: 9px; }
+.mp-input-row span { display: inline-block; min-width: 34px; }
+.mp-num { width: 36px; padding: 1px; font-size: 10px; }
 
 /* Reduction Image Compact */
 .ri-compact { padding: 4px; }
 .ri-header { display: flex; gap: 4px; margin-bottom: 4px; }
 .ri-filename { flex: 1; padding: 1px 4px; font-family: monospace; font-size: 10px; }
 .ri-thumbs {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
   margin-bottom: 4px;
 }
 .ri-thumb { display: flex; flex-direction: column; align-items: center; }
@@ -263,32 +290,70 @@ fieldset legend {
   background-size: 100% 100%, 100% 100%, 4px 4px;
 }
 .ri-thumb-label { font-size: 9px; color: #333; margin-top: 1px; }
-.ri-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.ri-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
 
-/* Param Group Compact (右侧紧凑版) */
-.param-group-compact { padding: 4px; }
-.param-row {
-  display: grid;
-  grid-template-columns: 90px 1fr 50px 60px;
-  align-items: center; gap: 4px;
-  margin-bottom: 2px;
-  font-size: 11px;
+/* Param Group Compact (右侧紧凑版，贴近原始 UI) */
+.param-group-compact { padding: 3px; }
+.param-group-compact legend { font-size: 11px; font-weight: 700; }
+.param-sub-fieldset {
+  border: 1px solid #aaa;
+  padding: 2px 4px 3px 4px;
+  margin: 2px 0;
 }
-.param-row-label { font-weight: 700; }
-.param-row-combo { padding: 1px; }
-.param-row-slider { padding: 0; width: 100%; height: 18px; accent-color: #0a246a; cursor: pointer; }
-.param-row-val { padding: 1px 2px; text-align: right; font-family: monospace; font-size: 11px; }
-.param-row-cap { font-size: 10px; color: #333; }
+.param-sub-fieldset legend { font-size: 10px; padding: 0 3px; }
+.param-sobel-row,
+.param-noise-row {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; margin: 2px 0;
+}
+.param-sobel-row select,
+.param-noise-row select { padding: 0; font-size: 10px; flex: 1 1 auto; min-width: 0; }
+.param-num-xs { width: 28px; padding: 1px; font-size: 10px; text-align: right; }
+.param-num-sm { width: 34px; padding: 1px; font-size: 10px; text-align: right; }
+.param-binary-row,
+.param-step-row {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 10px;
+}
+.param-binary-row input[type="range"],
+.param-step-row input[type="range"] {
+  flex: 1 1 auto; min-width: 0; height: 16px; padding: 0; margin: 0;
+}
+.param-binary-row span,
+.param-step-row span { white-space: nowrap; }
+.param-step-row button { padding: 1px 6px; font-size: 10px; white-space: nowrap; }
 .param-restore-row {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 4px; padding-top: 2px; border-top: 1px solid #888;
+  margin-top: 3px; padding-top: 2px; border-top: 1px solid #888;
+  font-size: 10px;
 }
-.param-restore-row label { font-size: 11px; display: inline-flex; gap: 3px; align-items: center; }
+.param-restore-row label { font-size: 10px; display: inline-flex; gap: 3px; align-items: center; }
 
 /* Validation Compact */
 .val-compact { padding: 4px; }
+.val-compact legend { font-size: 11px; font-weight: 700; }
+.val-original-section { margin-bottom: 6px; }
+.val-original-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  margin-bottom: 3px; justify-items: stretch;
+}
+.val-original-row > .val-original-pair:nth-child(3) { margin-left: 40px; }
+.val-original-row > .val-original-pair:nth-child(4) { margin-left: 20px; }
+.val-original-pair {
+  display: flex; align-items: center; gap: 2px;
+  font-size: 10px; min-width: 0;
+}
+.val-original-label {
+  background: #c0c0c0; padding: 3px 4px; white-space: nowrap; line-height: 1.4;
+  color: #000; font-weight: 700;
+}
+.val-original-value {
+  background: #fff; padding: 3px 4px; min-width: 28px; text-align: right; line-height: 1.4;
+  border: 1px solid #999;
+}
+/* 旧版兼容样式（保留以免其它引用） */
 .val-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
   margin-bottom: 4px;
 }
 .val-cell { display: flex; flex-direction: column; font-size: 10px; }
@@ -552,9 +617,12 @@ input, select, textarea {
 /* === GASOTI 面板（resource.rc y269） === */
 .gasoti-panel { border: 1px solid #555; padding: 2px 4px; margin: 0; background: #d4d0c8; font-size: 11px; }
 .gasoti-panel legend { font-size: 11px; font-weight: 700; padding: 0 4px; }
-.gasoti-row { display: flex; gap: 3px; align-items: center; }
+.gasoti-head { display: flex; gap: 3px; align-items: center; margin-bottom: 2px; }
+.gasoti-head .bs-lbl { font-size: 10px; }
+.gasoti-columns { display: flex; gap: 6px; }
+.gasoti-col { flex: 1; min-width: 0; }
 .gasoti-edit { flex: 1; min-width: 0; font-size: 10px; }
-.gasoti-area { width: 100%; height: 54px; margin-top: 2px; font-size: 10px; resize: none; }
+.gasoti-area { width: 100%; height: 66px; font-size: 10px; resize: none; overflow-y: auto; overflow-x: scroll; white-space: pre; }
 
 /* === VTB 面板（resource.rc y147） === */
 .vtb-panel { border: 1px solid #555; padding: 2px 4px; margin: 0; background: #d4d0c8; font-size: 11px; }
@@ -589,13 +657,12 @@ input, select, textarea {
 .ga-meta { font-size: 10px; display: inline-flex; gap: 2px; align-items: center; }
 
 /* === BottomStatusRow（resource.rc y633–670） === */
-.bottom-status { position: absolute; left: 0; bottom: 0; width: 1700px; height: 28px; font-size: 10px; background: #d4d0c8; z-index: 10; display: flex; align-items: center; padding: 2px 6px; }
-/* Coordinate File / Function Name：与 right-area 左边界（X900）严格对齐 */
-.bs-coord { position: absolute; left: 900px; bottom: 32px; width: 800px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 2px 4px; font-size: 10px; background: #d4d0c8; z-index: 11; }
+.bottom-status { position: absolute; left: 0; bottom: 0; width: 1800px; height: 40px; font-size: 10px; background: #d4d0c8; z-index: 10; display: flex; align-items: center; justify-content: flex-start; padding: 2px 6px; }
+.bottom-status-left { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
+.bottom-status-right { position: absolute; left: 900px; top: 2px; display: flex; flex-direction: column; gap: 2px; }
 .bs-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
 .bs-lbl { font-weight: 700; white-space: nowrap; }
 .bs-val-input { flex: 1 1 auto; min-width: 200px; font-size: 10px; font-family: monospace; }
-.bs-app { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 2px; background: #ece9d8; }
 .bs-spacer { flex: 1; }
 
 /* === Reduction Image 拆分两个 GroupBox（.rc X1101 / X1182） === */

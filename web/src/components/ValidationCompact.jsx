@@ -1,46 +1,62 @@
 import React from 'react';
 
 /**
- * 右侧 Validation Compact：
- *  8 cells: ver / OK / le / se / irAdd / gAdd / binaryAdd / speed
- *  + 标签: IR_Additive
+ * 右侧 Validation Result（贴近原始 UI）：
+ *  N=1 / N=2 各两行 label-value 对，紧密排列。
  */
-const CELLS_1 = [
-  ['ver', '0'], ['OK', 'gAdd'],
-  ['le', '0.12'], ['se', '0.05'],
-  ['irAdd', '128'], ['gAdd', '0'],
-  ['binaryAdd', 'Speed'], ['speed', '0.95'],
+const ROWS_N1 = [
+  [
+    { label: 'sion', value: '0000' },
+    { label: 'Validation Result', value: '84003E16' },
+    { label: 'ng', value: '126' },
+    { label: 'rt', value: '68' },
+  ],
+  [
+    { label: 'IR addition', value: '0' },
+    { label: 'Green', value: '24' },
+    { label: 'Binary', value: '28' },
+    { label: 'Speed', value: '0' },
+  ],
 ];
-const CELLS_2 = [
-  ['N=2', '1'], ['ver', '0'],
-  ['irAdd', '128'], ['gAdd', '0'],
-  ['IR Adictive', '0'], ['G Adictive', '0'],
-  ['binaryAdd', 'Speed'], ['speed', '0.95'],
+const ROWS_N2 = [
+  [
+    { label: 'Ver.', value: '0000' },
+    { label: 'Validation Result', value: '84003E16' },
+    { label: 'LE', value: '127' },
+    { label: 'SE', value: '68' },
+  ],
+  [
+    { label: 'IR Adictive', value: '0' },
+    { label: 'G Adictive', value: '7' },
+    { label: 'Binary', value: '27' },
+    { label: 'Speed', value: '0' },
+  ],
 ];
-function ValGroup({ cells, title }) {
+
+function ValRow({ pairs }) {
   return (
-    <div className="val-group">
-      <div className="val-group-title">{title}</div>
-      <div className="val-grid">
-        {cells.map(([k, v]) => (
-          <div key={k} className="val-cell">
-            <span className="val-k">{k}</span>
-            <span className="val-v">{v}</span>
-          </div>
-        ))}
-      </div>
+    <div className="val-original-row">
+      {pairs.map(({ label, value }) => (
+        <div key={`${label}-${value}`} className="val-original-pair">
+          <span className="val-original-label">{label}</span>
+          <span className="val-original-value">{value}</span>
+        </div>
+      ))}
     </div>
   );
 }
+
 export default function ValidationCompact() {
   return (
-    <fieldset className="val-compact">
+    <fieldset className="val-compact val-original">
       <legend>Validation Result</legend>
-      <ValGroup cells={CELLS_1} title="N=1" />
-      <ValGroup cells={CELLS_2} title="N=2" />
-      <div className="val-row-add">
-        <span className="val-label">IR_Additive:</span>
-        <input className="val-num" defaultValue="0" />
+      <div className="val-original-section">
+        <ValRow pairs={ROWS_N1[0]} />
+        <ValRow pairs={ROWS_N1[1]} />
+      </div>
+      <div className="val-original-section">
+        <ValRow pairs={ROWS_N2[0]} />
+        <ValRow pairs={ROWS_N2[1]} />
       </div>
     </fieldset>
   );

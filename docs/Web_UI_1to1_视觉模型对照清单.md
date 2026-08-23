@@ -24,6 +24,8 @@
 - `原版_主窗口.png` — 整体布局基准
 - `原版_图像视图.png` — IR1/IR2 双图 + 工具条
 
+> **布局模式说明（第十三轮新增）**：原版为固定 `resource.rc` 坐标布局，Web 现额外提供**可拖拽自由布局**（见 §三.3 `RC` 系统）——主要控件卡片可在页面内用鼠标拖拽重排，位置写入 `localStorage` 持久化，并可用"重置布局"按钮恢复默认。下表各面板 Y 坐标为**默认初始位置**，用户拖拽后实际位置以浏览器为准。截图核对时若发现面板错位，先确认是否为用户手动拖动所致（非实现缺陷）。
+
 ---
 
 ## 二、顶部区域（自上而下）
@@ -257,17 +259,20 @@
 
 > 更新于 2026-08-23 第十二轮（基于 DeepSeek 逆向坐标已完成主体改造 + 第二次截图核对）
 
-### ✅ 已完成（第十~十二轮回填）
+### ✅ 已完成（第十~十三轮回填）
 1. **坐标系统一**：Web 主窗口 1283×682，左/右分界 X=613，与原版一致
 2. **缩放策略修正**：`scale(max)` → `scale(min)`，底部不再被裁切
 3. **右侧两列布局重构**：按 DeepSeek 逆向 y 坐标绝对定位（inner-left 613–980 / inner-right 980–1279）
 4. **补齐 ResultDetails / RightGraphArea / BottomStatusRow**
 5. **样式修正**：MousePoint Show(V) 改按压按钮；ReductionImage 补 Set 4D
-6. **纠错**：删除臆造的 GASOTI/VTB/BigListPanel；OperationPanel 正名（原版真有）
+6. **恢复 GASOTI / VTB（resource.rc 证实真实存在）**：原 DeepSeek 误判删除 GasotiPanel/VtbPanel，2026-08-23 已按 resource.rc 还原；BigListPanel 对应 IDC_LIST1(915,1) 已被 AtbPanel 覆盖。OperationPanel 已正名（原版真有）
 7. **Image Processing 滑块**：ParamPanelGroup 用原生 range（非下拉框）
 8. **Operation 完整**：F1–F8 矩阵 + Ope.(Start) + Function processing/Other mode 复选框均在
 9. **Make Graph / Statistics / Graph File / S2 图表**：RightGraphArea 整合已实现
 10. **AppStatus 数值**：`0%` → 原版 `-25%`（第十二轮修复）
+11. **可拖拽容器系统 RC（第十三轮）**：主要控件卡片（Validation / GASOTI / Notes / Operation / Make Graph / Statistics / Graph1 / Graph2 / S2Chart / TH Row / Bottom Status / MousePoint）统一改用 `RC` 组件绝对定位 + 鼠标拖拽，标题栏/fieldset legend 为拖拽手柄，位置持久化 `localStorage`（`rc-positions`），并支持"重置布局"按钮统一复位。
+12. **GASOTI 文本区自适应**：GasotiPanel 拖拽卡片内多行文本框改为 `flex:1` + JS 按内容 `scrollHeight` 自动扩展，超长出现上下/左右滚动条，容器高度可加高以容纳更多内容。
+13. **Make Graph 下方绘图区 GraphPlot（第十三轮）**：新增 500×250 可拖拽图例/绘图容器，含 `Area / Gap` 图例行 + 网格曲线（SVG）+ 统计（Avg/Std）；默认置于 Make Graph 正下方（left:20, top:540）。
 
 ### 🟡 中优先级（像素级复核，需截图 + 视觉模型）
 11. **IR1/IR2 图区高度**：原版各 250px（88–338 / 360–610），当前 flex 等分需确认未拉长

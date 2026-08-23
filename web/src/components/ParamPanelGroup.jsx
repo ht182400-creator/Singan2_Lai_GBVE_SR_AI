@@ -1,38 +1,88 @@
 import React from 'react';
 
 /**
- * 右侧 ParamPanelGroup（紧凑版）：
- *  Gradient + Binary Segmentation + step movement + Noise reduction
- *  每行：[label] [combo] [slider] [value]
- *  底部：Restore Image 按钮 + Fix Image 勾选
+ * 右侧 Image Processing 面板（贴近原始 UI）：
+ *  - Sobel 下拉 + 数值
+ *  - Binary Segmentation（slider / - / + / Threshold）
+ *  - step movement（slider / Movement）
+ *  - Noise reduction（MoveAverage + Start）
+ *  - Restore Image (M) + Fix Image
  */
-function ParamRow({ label, val, setVal, pushHistory }) {
-  const cap = label.includes('Gradient') ? 'Gain' : label.includes('Binary') ? 'Threshold' : label.includes('step') ? 'Movement' : 'Start';
-  return (
-    <div className="param-row">
-      <span className="param-row-label">{label}</span>
-      <input type="range" min="0" max="100" value={val} onChange={(e) => setVal(Number(e.target.value))} className="param-row-slider" />
-      <input type="number" value={val} onChange={(e) => setVal(Number(e.target.value))} className="param-row-val" />
-      <span className="param-row-cap">{cap}</span>
-    </div>
-  );
-}
-
 export default function ParamPanelGroup({ pushHistory }) {
-  const [v1, setV1] = React.useState(0);
-  const [v2, setV2] = React.useState(0);
-  const [v3, setV3] = React.useState(0);
-  const [v4, setV4] = React.useState(0);
+  const [sobel, setSobel] = React.useState('Sobel');
+  const [sobelVal, setSobelVal] = React.useState(1);
+  const [binary, setBinary] = React.useState(39);
+  const [step, setStep] = React.useState(0);
+  const [noise, setNoise] = React.useState('MoveAverage');
   const [fix, setFix] = React.useState(false);
+
   return (
     <fieldset className="param-group-compact">
       <legend>Image Processing</legend>
-      <ParamRow label="Gradient" val={v1} setVal={setV1} />
-      <ParamRow label="Binary Segmentation" val={v2} setVal={setV2} />
-      <ParamRow label="step movement" val={v3} setVal={setV3} />
-      <ParamRow label="Noise reduction" val={v4} setVal={setV4} />
+
+      <div className="param-sobel-row">
+        <span>Sobel</span>
+        <select value={sobel} onChange={(e) => setSobel(e.target.value)}>
+          <option>Sobel</option>
+          <option>Roberts</option>
+          <option>Normal</option>
+          <option>Laplacian</option>
+          <option>Prewitt</option>
+        </select>
+        <input
+          type="number" min={0} value={sobelVal}
+          onChange={(e) => setSobelVal(Number(e.target.value))}
+          className="param-num-xs"
+        />
+      </div>
+
+      <fieldset className="param-sub-fieldset">
+        <legend>Binary Segmentation</legend>
+        <div className="param-binary-row">
+          <button className="btn btn-xs" onClick={() => setBinary((v) => Math.max(0, v - 1))}>-</button>
+          <input
+            type="range" min={0} max={100} value={binary}
+            onChange={(e) => setBinary(Number(e.target.value))}
+          />
+          <button className="btn btn-xs" onClick={() => setBinary((v) => Math.min(100, v + 1))}>+</button>
+          <input
+            type="number" min={0} max={100} value={binary}
+            onChange={(e) => setBinary(Number(e.target.value))}
+            className="param-num-sm"
+          />
+          <span>Threshold</span>
+        </div>
+      </fieldset>
+
+      <fieldset className="param-sub-fieldset">
+        <legend>step movement</legend>
+        <div className="param-step-row">
+          <button className="btn" onClick={() => setStep(0)}>Default</button>
+          <input
+            type="number" min={0} max={100} value={step}
+            onChange={(e) => setStep(Number(e.target.value))}
+            className="param-num-sm"
+          />
+          <input
+            type="range" min={0} max={100} value={step}
+            onChange={(e) => setStep(Number(e.target.value))}
+          />
+          <span>Movement</span>
+        </div>
+      </fieldset>
+
+      <div className="param-noise-row">
+        <span>Noise reduction</span>
+        <select value={noise} onChange={(e) => setNoise(e.target.value)}>
+          <option>MoveAverage</option>
+          <option>MoveAverageMet</option>
+          <option>Median</option>
+        </select>
+        <button className="btn btn-xs" onClick={() => pushHistory?.('Noise reduction Start')}>Start</button>
+      </div>
+
       <div className="param-restore-row">
-        <button className="btn" onClick={() => pushHistory?.('Restore Image')}>Restore Image</button>
+        <button className="btn" onClick={() => pushHistory?.('Restore Image')}>Restore Image (M)</button>
         <label><input type="checkbox" checked={fix} onChange={(e) => setFix(e.target.checked)} /> Fix Image</label>
       </div>
     </fieldset>

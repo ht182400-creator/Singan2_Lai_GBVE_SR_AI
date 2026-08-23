@@ -73,7 +73,7 @@
 3. **右侧布局重构**：3 列 grid → 两列绝对定位（inner-left 613–980 / inner-right 980–1279），各面板按 DeepSeek 逆向 y 坐标定位。
 4. **补齐组件**：ResultDetails（新建）、RightGraphArea（整合 Graph 区）、BottomStatusRow（全宽状态栏）。
 5. **样式修正**：MousePoint 的 Show(V) 复选框 → Win32 按压按钮；ReductionImage 补 Set 4D。
-6. **纠错删除**：移除臆造的 GASOTI / VTB / BigListPanel（DeepSeek 确认原版无此区域）。
+6. **恢复 GASOTI / VTB（resource.rc 证实真实存在）**：原 DeepSeek 误判"原版无此区域"而删除了 GasotiPanel/VtbPanel，2026-08-23 已按 resource.rc 还原（IDC_GASOTI 629,269 / IDC_LIST_VTB 915,147）。BigListPanel 对应 resource.rc 的 IDC_LIST1(915,1) 顶部列表，已被 AtbPanel 覆盖，未单独恢复。OperationPanel 已正名（原版真有）。
 7. **OperationPanel 正名**：确认原版真有（非臆造），去掉第十轮误加的红线框标注。
 
 ---

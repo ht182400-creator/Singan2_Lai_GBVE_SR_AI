@@ -27,6 +27,10 @@ import ContextMenu from './components/ContextMenu.jsx';
 import ListResultsView from './components/ListResultsView.jsx';
 import ResultDetails from './components/ResultDetails.jsx';
 import AtbPanel from './components/AtbPanel.jsx';
+import GasotiPanel from './components/GasotiPanel.jsx';
+import VtbPanel from './components/VtbPanel.jsx';
+import RC from './components/RC.jsx';
+import GraphPlot from './components/GraphPlot.jsx';
 
 import { sampleResults } from './data/sample.js';
 
@@ -106,35 +110,53 @@ export default function App() {
       {/* 左侧主画布：绝对定位 X0–613, Y88 起 */}
       <div className="main-canvas">{renderMainCanvas()}</div>
 
-      {/* 右侧区：绝对定位 X613, Y88, 宽787，高682；内部所有面板直接用 .rc 坐标(局部 left=rcX-613, top=rcY) */}
+      {/* 右侧区：绝对定位 X900, Y44, 宽900，高956；内部所有面板直接用 .rc 坐标(局部 left=rcX-613, top=rcY*1.337) */}
       <div className="right-area">
         {/* Mouse Point (rc 631,1) */}
-        <div className="rc rc-mouse-point"><MousePointCompact pushHistory={pushHistory} /></div>
+        <RC id="mouse-point" className="rc-mouse-point" dl={22} dt={0}><MousePointCompact pushHistory={pushHistory} /></RC>
+        {/* Operation History (rc 714,6) — resource.rc 真实存在，曾被误删；Switch View 置于其后 */}
+        <RC id="op-history" className="rc-op-history" dl={122} dt={8}>
+          <div className="op-history-head">
+            <span>Operation History</span>
+            <button className="btn btn-xs" onClick={() => pushHistory('Switch View')}>Switch View</button>
+            <button className="btn btn-xs" onClick={() => pushHistory('Clear History')}>Clear</button>
+          </div>
+          <select className="op-history-list" size={3}>
+            {history.slice(0, 16).map((h, i) => (
+              <option key={i} value={i}>{h}</option>
+            ))}
+          </select>
+        </RC>
         {/* Reduction Image 1 / 2 (rc 1101,2 / 1182,2) */}
-        <div className="rc rc-reduction-1"><ReductionImageCompact variant={1} pushHistory={pushHistory} /></div>
-        <div className="rc rc-reduction-2"><ReductionImageCompact variant={2} pushHistory={pushHistory} /></div>
+        <RC id="reduction-1" className="rc-reduction-1" dl={586} dt={3}><ReductionImageCompact variant={1} pushHistory={pushHistory} /></RC>
+        <RC id="reduction-2" className="rc-reduction-2" dl={683} dt={3}><ReductionImageCompact variant={2} pushHistory={pushHistory} /></RC>
         {/* Image Processing (rc 630,77) */}
-        <div className="rc rc-image-processing"><ParamPanelGroup pushHistory={pushHistory} /></div>
+        <RC id="image-processing" className="rc-image-processing" dl={20} dt={103}><ParamPanelGroup pushHistory={pushHistory} /></RC>
         {/* Validation Result N=1/N=2 (rc 630,216 / 630,243) */}
-        <div className="rc rc-validation"><ValidationCompact /></div>
+        <RC id="validation" className="rc-validation" dl={20} dt={264}><ValidationCompact /></RC>
+        {/* GASOTI 真币图文本区 (rc 629,269) — resource.rc 真实存在，曾被误删 */}
+        <RC id="gasoti" className="rc-gasoti" dl={19} dt={390}><GasotiPanel /></RC>
         {/* Operation (rc 630,350) */}
-        <div className="rc rc-operation"><OperationPanel pushHistory={pushHistory} /></div>
+        <RC id="operation" className="rc-operation" dl={220} dt={585}><OperationPanel pushHistory={pushHistory} /></RC>
         {/* Notes / TH Row (rc 630,530 / 630,570) */}
-        <div className="rc rc-notes"><NotesRow /></div>
-        <div className="rc rc-th-row"><ThRow pushHistory={pushHistory} /></div>
-        {/* Make Graph / Statistics (rc 630,341) */}
-        <div className="rc rc-make-graph"><MakeGraphRow pushHistory={pushHistory} /></div>
-        <div className="rc rc-statistics"><StatisticsRow pushHistory={pushHistory} /></div>
+        <RC id="notes" className="rc-notes" dl={220} dt={770}><NotesRow /></RC>
+        <RC id="th-row" className="rc-th-row" dl={20} dt={700}><ThRow pushHistory={pushHistory} /></RC>
+        {/* Make Graph / Statistics (rc 630,341 / 892,342) */}
+        <RC id="make-graph" className="rc-make-graph" dl={20} dt={500}><MakeGraphRow pushHistory={pushHistory} /></RC>
+        <RC id="statistics" className="rc-statistics" dl={485} dt={395}><StatisticsRow pushHistory={pushHistory} /></RC>
+        {/* Make Graph 下方绘图区 / 图例 (500x250, 可拖拽) */}
+        <RC id="graph-plot" className="rc-graph-plot" dl={20} dt={540} as="fieldset"><legend>Graph</legend><GraphPlot /></RC>
         {/* Graph File 行 (rc 997,265) */}
-        <div className="rc rc-graph-file"><GraphFileRow pushHistory={pushHistory} /></div>
+        <RC id="graph-file" className="rc-graph-file" dl={461} dt={350}><GraphFileRow pushHistory={pushHistory} /></RC>
         {/* Graph1 / Graph2 黑底编辑框 (rc 1068,361 / 1068,492) */}
-        <fieldset className="rc rc-graph1"><legend>Graph1</legend><textarea className="graph-black-edit" defaultValue={'0.12\n0.05\n0.88\n0.91\n0.79'} /></fieldset>
-        <fieldset className="rc rc-graph2"><legend>Graph2</legend><textarea className="graph-black-edit" defaultValue={'0.10\n0.07\n0.85\n0.93\n0.81'} /></fieldset>
-        {/* S2 图表（Graph 区右侧） */}
-        <div className="rc rc-s2chart"><S2Chart fileName="graph1.grp" /></div>
-        {/* 最右端大区：Result Details / ATB / VTB (rc 916,16, 宽484) */}
-        <div className="rc rc-right-end">
-          <ResultDetails pushHistory={pushHistory} />
+        <RC id="graph1" className="rc-graph1" dl={547} dt={475} as="fieldset"><legend>Graph1</legend><textarea className="graph-black-edit" defaultValue={'0.12\n0.05\n0.88\n0.91\n0.79'} /></RC>
+        <RC id="graph2" className="rc-graph2" dl={547} dt={620} as="fieldset"><legend>Graph2</legend><textarea className="graph-black-edit" defaultValue={'0.10\n0.07\n0.85\n0.93\n0.81'} /></RC>
+        {/* S2 图表（Graph 区右侧窄条） */}
+        <RC id="s2chart" className="rc-s2chart" dl={732} dt={475}><S2Chart fileName="graph1.grp" /></RC>
+        {/* VTB 区 (rc 915,147) — resource.rc 真实存在，曾被误删 */}
+        <RC id="vtb" className="rc-vtb" dl={362} dt={197}><VtbPanel pushHistory={pushHistory} /></RC>
+        {/* ATB 区 (rc 917,4) */}
+        <RC id="atb" className="rc-atb" dl={364} dt={5}>
           <AtbPanel
             fileName={atbFile} setFileName={setAtbFile}
             version={atbVer} setVersion={setAtbVer}
@@ -142,16 +164,15 @@ export default function App() {
             radioMode={atbRadio} setRadioMode={setAtbRadio}
             pushHistory={pushHistory}
           />
-        </div>
+        </RC>
+        {/* Result Details（Web 自创汇总）置于 ATB 下方右侧空白区 */}
+        <RC id="result" className="rc-result" dl={380} dt={775}>
+          <ResultDetails pushHistory={pushHistory} />
+        </RC>
       </div>
 
-      {/* 底部全局状态栏（Coordinate/Function rc 629,646；底部 static top682 全宽1400） */}
-      <BottomStatusRow
-        coordFileName="E:\AI_Studio\NCR_tool\Singan2_Lai_GBVE_SR_AtlaKataWORK_ATL_240_10309\85901.txt"
-        funcNameFile="functions.txt"
-        onChangeCoord={() => setActiveDialog('loadCoord')}
-        onChangeFunc={() => setActiveDialog('funcName')}
-      />
+      {/* 底部全局状态栏（全宽 1800，位于窗口最底；Coordinate/Function 已移入） */}
+      <BottomStatusRow />
 
       {activeDialog === 'confirm' && (
         <DialogModal

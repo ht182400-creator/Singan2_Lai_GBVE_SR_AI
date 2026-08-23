@@ -53,7 +53,7 @@
 | `IDC_EDIT_VIEW_DATA_INDEX` | 枚数（数字框） | `DataSelectorBar` | ✅ |
 | `IDC_CNT` / `IDC_CNT2` | 当前/总数（如 1/40） | `DataSelectorBar` | ✅ |
 | `IDC_CHECK_SYNC_MOVE` | "Sync Move"（勾选） | `DataSelectorBar` | ✅ |
-| `IDC_GASOTI` / `IDC_GASOTI2` | 数据备注多行文本框 | — | ❌ |
+| `IDC_GASOTI` / `IDC_GASOTI2` | 数据备注多行文本框 | `GasotiPanel`（拖拽卡片 + 自适应文本框，内容滚动条） | ✅ |
 | `IDC_ZAHYO` / `IDC_ZAHYO2` | 坐标显示（sunken） | — | ❌ |
 
 ## 区域 5：Mouse Point（右侧，IDC_STATIC 631,1）
@@ -121,7 +121,7 @@
 | `IDC_CHECK_CompareOption` "1 < 2" | 1<2 勾选 | `StatisticsRow` | ✅ |
 | `IDC_BUTTON_LOAD_GRAPH` / `IDC_BUTTON_SAVE_GRAPH` / `IDC_BUTTON_CLEAR_GRAPH_LIST` / `IDC_BUTTON_MAKE_COMBINE_GRAPH` | Load Graph... / Save Graph / Clear / Graph (Combine) | `GraphFileRow` + `GraphCombine` | ✅ |
 | `IDC_BUTTON_GRAPH_MULTI` "Mul-X" + `IDC_EDIT_GRAPH_MULTI` + `IDC_BUTTON_GRAPH1_2_DESTRACT_ABS` "ABS (Graph1 - Graph2)" | Mul-X / 数值 / ABS 差 | `GraphFileRow` | ✅ |
-| `IDC_EDIT_GRAPH1` / `IDC_EDIT_GRAPH2` | 两个大文本框 | — | ❌ |
+| `IDC_EDIT_GRAPH1` / `IDC_EDIT_GRAPH2` | 两个大文本框 | `GraphPlot`（Make Graph 下方 500×250 可拖拽图例/绘图区） | ✅ |
 
 ## 区域 11：Operation History（右侧，IDC_STATIC 714,6）
 
@@ -155,6 +155,16 @@
 |---|---|
 | ✅ 已实现 | 主窗口核心 11 区域全覆盖，约 60+ 控件 |
 | 🟡 部分实现 | 4 处（Data 文件名下拉、ATB/TH、坐标对话框） |
-| ❌ 未实现 | 画布侧标签、Data 备注/坐标框、VTB 列表、第二组 Validation、Graph 大文本框、Operation History、IDD_J_DLG、Create/Setting 对话框 |
+| ❌ 未实现 | 画布侧标签、Data 备注/坐标框、VTB 列表、第二组 Validation、Operation History、IDD_J_DLG、Create/Setting 对话框 |
 
-> 下一步建议优先级：❌ 项中「Operation History 列表」「VTB 列表区」「Graph 大文本框」为可见空白，先补；其次补全 Data 备注/坐标框与菜单对话框。
+> 下一步建议优先级：❌ 项中「Operation History 列表」「VTB 列表区」为可见空白，先补；其次补全 Data 备注/坐标框与菜单对话框。
+
+---
+
+## 可拖拽容器系统（RC，2026-08-23 新增）
+
+Web 主要控件卡片不再完全绑定 `resource.rc` 固定坐标，改用 `RC` 组件（`web/src/components/RC.jsx`）：
+- 每个卡片 `position: absolute`，标题栏 / `fieldset` legend 为拖拽手柄（Pointer Events API，带 4px 防抖阈值）；
+- 拖拽位置存入 `localStorage` key `rc-positions`，刷新后保持；
+- 顶部"重置布局"按钮可清空 `rc-positions` 恢复各卡片默认 `left/top`；
+- 已接入：Validation / GASOTI / Notes / Operation / Make Graph / Statistics / Graph1 / Graph2 / S2Chart / TH Row / Bottom Status / MousePoint / GraphPlot。
