@@ -1,0 +1,45 @@
+[m1 or m8] 0
+[ヘッダ有無] 1
+[国] 4
+[オフセット（赤）] 128
+[オフセット（緑）] 128
+[速度考慮（出力時）] 0
+[上書きチェック]
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+[座標ファイル] Y:\Work\GBVM\04_Area\X_ATB_DOP_5F1906040002.bin.txt
+[パス]
+E:\Project\UAE\GBVE_UAE_NN-DC(AED_500)_3567_12Dec23\DIC\20_500F_seed100_A.dat
+E:\Project\UAE\GBVE_UAE_NN-DC(AED_500)_3567_12Dec23\DIC\20_500F_seed100_B.dat
+E:\Project\UAE\GBVE_UAE_NN-DC(AED_500)_3567_12Dec23\DIC\20_500F_seed100_C.dat
+E:\Project\UAE\GBVE_UAE_NN-DC(AED_500)_3567_12Dec23\DIC\20_500F_seed100_D.dat
+E:\Project\UAE\LowMax\16_50F_A.dat
+E:\Project\UAE\LowMax\16_50F_B.dat
+E:\Project\UAE\LowMax\16_50F_C.dat
+E:\Project\UAE\LowMax\16_50F_D.dat
+E:\Project\UAE\LowMax\19_1000C_A.dat
+E:\Project\UAE\LowMax\19_1000C_B.dat
+E:\Project\UAE\LowMax\19_1000C_C.dat
+E:\Project\UAE\LowMax\19_1000C_D.dat
+****
+[選択座標ファイルＮｏ]0
+[その他座標ファイル]
+Y:\Work\GBVM\04_Area\X_ATB_DOP_5F1906040002.bin.txt
+
+
+
+
+
+
+
+***********
+[関数名称ファイル]
+***/**/***
+[ATB]
+E:\Project\Lebanon\LC6510\03_ATB\X_ATB_LC_9C2311010002.bin
+***/**/***
+[CTB]
+
+***/**/***
+[VTB]
+
+***/**/***

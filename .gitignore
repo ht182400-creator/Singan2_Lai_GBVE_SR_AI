@@ -1,0 +1,41 @@
+# Dependencies (large, excluded)
+node_modules/
+web/node_modules/
+
+# Build artifacts (excluded)
+build/
+dist/
+web/dist/
+web/build/
+*.obj
+*.tlog
+*.idb
+*.pdb
+*.ilk
+
+# Cache / temp files (excluded)
+.codebuddy/
+*.log
+*.tmp
+*.cache
+*.pyc
+__pycache__/
+.vscode/
+.idea/
+
+# Test files (user requested exclusion)
+*.test.js
+*.test.jsx
+web/vitest.config.*
+web/vitest.setup.*
+web/src/**/*.test.*
+tests/
+
+# Large data samples (>10MB, user requested exclusion)
+data/2A_DA_111017_115542.dat
+data/UAE/GBVX_GraphData.dat
+data/UAE/GBVX_GraphData_50F.dat
+data/ZAR/2A_DA_111017_115542.dat
+
+# Temp analysis/export file (excluded)
+请仔细阅读*

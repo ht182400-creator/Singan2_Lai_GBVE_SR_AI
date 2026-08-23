@@ -1,0 +1,28 @@
+{
+  "name": "singan2-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SINGAN2 (GBVE/SR) Web 前端 —— 原版 Win32 UI 的 1:1 复刻（M4 / AI 工程 B）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "echarts": "^5.5.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.10.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.6",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
+  }
+}

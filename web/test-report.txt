@@ -1,0 +1,46 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mE:/AI_Studio/NCR_tool/Singan2_Lai_GBVE_SR_AI/web[39m
+
+ [32m✓[39m src/components/TopMenuBar.test.jsx [2m([22m[2m11 tests[22m[2m)[22m[90m 208[2mms[22m[39m
+ [32m✓[39m src/components/DialogModal.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[90m 268[2mms[22m[39m
+ [32m✓[39m src/components/ReductionImageCompact.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 313[2mms[22m[39m
+ [32m✓[39m src/components/MousePointCompact.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[33m 386[2mms[22m[39m
+ [32m✓[39m src/components/ChannelTab.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[33m 471[2mms[22m[39m
+ [32m✓[39m src/components/SubToolbarRow.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 550[2mms[22m[39m
+   [33m[2m✓[22m[39m SubToolbarRow（原版副通道 12 标签，对照 WinMain.cpp ImgType[10..21]）[2m > [22m渲染全部 12 个按钮（含唯一 IR - Gp / IR & Gp / IR | Gp） [33m464[2mms[22m[39m
+ [32m✓[39m src/components/ParamPanelGroup.test.jsx [2m([22m[2m5 tests[22m[2m)[22m[33m 424[2mms[22m[39m
+ [32m✓[39m src/components/DataSelectorBar.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[33m 623[2mms[22m[39m
+   [33m[2m✓[22m[39m DataSelectorBar（原版双行版）[2m > [22m渲染 Data1 行：Edit / Clear / path / 4 个方向按钮 / Go / 枚数 [33m355[2mms[22m[39m
+ [32m✓[39m src/components/OperationPanel.test.jsx [2m([22m[2m7 tests[22m[2m)[22m[33m 753[2mms[22m[39m
+ [32m✓[39m src/components/ContextMenu.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[90m 132[2mms[22m[39m
+ [32m✓[39m src/components/TitleBar.test.jsx [2m([22m[2m5 tests[22m[2m)[22m[90m 232[2mms[22m[39m
+ [32m✓[39m src/components/ListResultsView.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[90m 145[2mms[22m[39m
+ [32m✓[39m src/components/StatusBar.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[90m 228[2mms[22m[39m
+ [32m✓[39m src/components/GraphPanel.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[90m 117[2mms[22m[39m
+ [32m✓[39m src/components/GraphCombine.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+ [32m✓[39m src/components/GraphFileRow.test.jsx [2m([22m[2m5 tests[22m[2m)[22m[33m 397[2mms[22m[39m
+ [32m✓[39m src/components/ImagePane.test.jsx [2m([22m[2m7 tests[22m[2m)[22m[33m 3612[2mms[22m[39m
+   [33m[2m✓[22m[39m ImagePane（原版真币图 + 直方图）[2m > [22m渲染左上角标题 label [33m2407[2mms[22m[39m
+   [33m[2m✓[22m[39m ImagePane（原版真币图 + 直方图）[2m > [22msmall 模式渲染缩略图节点 [33m431[2mms[22m[39m
+ [32m✓[39m src/components/StatisticsRow.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 306[2mms[22m[39m
+ [32m✓[39m src/components/MakeGraphRow.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[33m 403[2mms[22m[39m
+ [32m✓[39m src/components/ValidationCompact.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[90m 94[2mms[22m[39m
+ [32m✓[39m src/components/S2Chart.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[90m 63[2mms[22m[39m
+ [32m✓[39m src/components/NotesRow.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[90m 62[2mms[22m[39m
+ [32m✓[39m src/components/BigListPanel.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[90m 97[2mms[22m[39m
+ [32m✓[39m src/components/ThRow.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[90m 267[2mms[22m[39m
+ [32m✓[39m src/components/AppStatusBar.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[90m 73[2mms[22m[39m
+ [32m✓[39m src/App.test.jsx [2m([22m[2m14 tests[22m[2m)[22m[33m 6925[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m整页渲染不崩（修复 undefined.map 类崩溃） [33m2461[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m顶部 3 层结构：菜单 / 通道 / 子工具（无 Toolbar 行） [33m1439[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m主区 = 左 main-canvas + 右 7 个 panel [33m364[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m主画布内嵌 IR1 + IR2 上下双图 + 双 DataSelectorBar（原版上下两个大图） [33m401[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m主通道有 10 个原版通道按钮 [33m342[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m副通道有 12 个原版按钮（对照 WinMain.cpp ImgType[10..21]） [33m343[2mms[22m[39m
+   [33m[2m✓[22m[39m App (集成)[2m > [22m右侧 Operation 区含 7 个按钮（IR-Vi/Normal Id/Manual Lw/Thickness/Standard/End Processing/reserved） [33m636[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m26 passed[39m[22m[90m (26)[39m
+[2m      Tests [22m [1m[32m118 passed[39m[22m[90m (118)[39m
+[2m   Start at [22m 10:44:10
+[2m   Duration [22m 10.50s[2m (transform 1.53s, setup 12.95s, collect 4.89s, tests 17.50s, environment 37.61s, prepare 6.07s)[22m
+
