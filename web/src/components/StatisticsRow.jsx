@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 /**
  * Statistics 行：Start / Step / Times / 1<2 / Statistics（自给自足）
  */
-export default function StatisticsRow({ pushHistory }) {
+export default function StatisticsRow({ pushHistory, onStatistics }) {
   const [start, setStart] = useState(0);
   const [step, setStep] = useState(1);
   const [times, setTimes] = useState(16);
@@ -17,7 +17,7 @@ export default function StatisticsRow({ pushHistory }) {
       <span className="stat-label">Times</span>
       <input type="number" value={times} onChange={(e) => setTimes(Number(e.target.value))} className="stat-num" />
       <label><input type="checkbox" checked={cmp12} onChange={(e) => setCmp12(e.target.checked)} /> 1&lt;2</label>
-      <button className="btn" onClick={() => pushHistory?.('Statistics')}>Statistics</button>
+      <button className="btn" onClick={() => { pushHistory?.('Statistics'); onStatistics?.(start, step, times); }}>Statistics</button>
     </div>
   );
 }

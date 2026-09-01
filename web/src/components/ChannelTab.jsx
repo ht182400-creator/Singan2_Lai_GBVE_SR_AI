@@ -18,13 +18,13 @@ const CHANNELS = [
   'abs(IR-Gp)',
 ];
 
-export default function ChannelTab({ channel, setChannel }) {
+export default function ChannelTab({ channel, setChannel, onSelect }) {
   return (
     <div className="channel-tab">
       {CHANNELS.map((c, i) => (
         <button key={c}
           className={'channel-btn' + (i === channel ? ' active' : '')}
-          onClick={() => setChannel(i)}>
+          onClick={() => { setChannel(i); onSelect?.(c); }}>
           {c}
         </button>
       ))}

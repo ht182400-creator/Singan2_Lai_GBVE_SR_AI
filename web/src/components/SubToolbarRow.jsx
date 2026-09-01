@@ -21,14 +21,14 @@ const ITEMS = [
   'IR4_B (A4)',
 ];
 
-export default function SubToolbarRow({ active, setActive, pushHistory }) {
+export default function SubToolbarRow({ active, setActive, pushHistory, onSelect }) {
   return (
     <div className="sub-toolbar">
       {ITEMS.map((it) => (
         <button
           key={it}
           className={`sub-btn ${it.startsWith('Red Ref') ? 'sub-btn-wide' : ''} ${active === it ? 'active' : ''}`}
-          onClick={() => { setActive(it); pushHistory?.(`SubToolbar → ${it}`); }}
+          onClick={() => { setActive(it); pushHistory?.(`SubToolbar → ${it}`); onSelect?.(it); }}
         >
           {it}
         </button>

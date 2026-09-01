@@ -9,7 +9,7 @@ import React, { useState } from 'react';
  */
 const FUNCS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8'];
 
-export default function OperationPanel({ pushHistory }) {
+export default function OperationPanel({ pushHistory, onRun }) {
   const [mode, setMode] = useState('Real');
   const [checkNote, setCheckNote] = useState(true);
   const [reason, setReason] = useState(false);
@@ -82,7 +82,7 @@ export default function OperationPanel({ pushHistory }) {
           {FUNCS.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
         <button className="btn btn-xs" onClick={() => pushHistory?.('Load VER...')}>Load VER...</button>
-        <button className="btn btn-start" onClick={() => pushHistory?.('Ope. (Start)')}>Ope. (Start)</button>
+        <button className="btn btn-start" onClick={() => { pushHistory?.('Ope. (Start)'); onRun?.(); }}>Ope. (Start)</button>
       </div>
     </fieldset>
   );
