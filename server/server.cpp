@@ -36,6 +36,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -300,25 +302,26 @@ static std::string encode_u16(const std::vector<uint16_t>& v, int& mn, int& mx) 
     return base64_encode(bytes.data(), bytes.size());
 }
 
-// ---- 除法表加载（带缓存）----
+// ---- 除法表加载（带缓存，线程安全：浏览器会并发请求 /api/image）----
 static const WTable& get_wtable(const std::string& path) {
-    static WTable cached;
-    static std::string cached_path;
-    static bool loaded = false;
-    std::string key = path.empty() ? std::string("<theory>") : path;
-    if (loaded && cached_path == key) return cached;
+    static std::mutex mu;
+    static std::map<std::string, WTable> cache;
+    const std::string key = path.empty() ? std::string("<theory>") : path;
+    std::lock_guard<std::mutex> lk(mu);
+    const auto it = cache.find(key);
+    if (it != cache.end()) return it->second;
+    WTable wt;
     if (path.empty()) {
-        cached = singan2::gen_w_table();
+        wt = singan2::gen_w_table();
     } else {
         try {
-            cached = singan2::load_w_table(path);
+            wt = singan2::load_w_table(path);
         } catch (...) {
-            cached = singan2::gen_w_table();
+            wt = singan2::gen_w_table();
         }
     }
-    cached_path = key;
-    loaded = true;
-    return cached;
+    // std::map 节点地址稳定且从不删除，返回引用在解锁后仍有效
+    return cache.emplace(key, std::move(wt)).first->second;
 }
 
 // ---- 构建 ImageEngine（读取指定记录的 13 波段并转 2 字节）----
