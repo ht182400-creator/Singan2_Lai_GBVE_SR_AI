@@ -125,10 +125,12 @@ export default function App() {
   const loadImages = useCallback(async (rec, wave) => {
     setBusy(true);
     try {
-      // IR2 固定取 Img2（另一面 SRU_Side 尚未移植，暂以第 2 波段近似）
+      // MFC 语义：IR1 = global_oneimg(8bit, 当前波段)；IR2 = global_twoimg(16bit, 同一波段)。
+      // 两个画布显示同一 ImgX，仅位深不同，故 IR2 跟随通道取当前波段的 2byte 版本
+      //（中间波段 Img7..Img15 由服务端 /api/image(mode=2byte) 按需补算）。
       const [a, b] = await Promise.all([
         getImage({ datPath, record: rec, wave: wave.name, mode: wave.mode, wtablePath }),
-        getImage({ datPath, record: rec, wave: 'Img2', mode: 'raw', wtablePath }),
+        getImage({ datPath, record: rec, wave: wave.name, mode: '2byte', wtablePath }),
       ]);
       setIr1Img(a);
       setIr2Img(b);

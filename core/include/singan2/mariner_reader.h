@@ -15,7 +15,16 @@ using BlockInfo = std::tuple<std::string, int, uint32_t, uint32_t>;
 std::vector<BlockInfo> parse_blocks(const std::string& file_path);
 
 // 整文件读取（带进程级缓存 + 线程安全）。同一 .dat 反复切片时近零开销。
+// 缓存按字节上限做 LRU 淘汰（默认 2048MB，可用环境变量 SINGAN2_FILE_CACHE_MB 覆盖），
+// 因此打开上千枚的大 .dat（如 1000 枚 ≈ 213MB/文件）也只需缓存文件本体一份。
 const std::vector<uint8_t>& load_file_cached(const std::string& file_path);
+
+// 文件缓存管理（供 server 的 /api/cache 端点使用）
+size_t file_cache_bytes();            // 当前缓存占用字节
+size_t file_cache_capacity();         // 容量上限字节
+void   file_cache_set_capacity(size_t bytes);  // 调整容量上限（触发 LRU 收缩）
+size_t file_cache_file_count();       // 缓存的文件数
+void   file_cache_clear();            // 清空缓存
 
 // 提取第 record_index 枚的 MM1_Side 数据，拼成 global_onedat(GLOBAL_ONEDAT_SIZE 字节)
 // 越界/失败时返回空 vector

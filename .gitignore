@@ -43,3 +43,9 @@ data/ZAR/2A_DA_111017_115542.dat
 Singan2项目构架解读_*.json
 *构架解读_*.json
 *.json.bak
+
+# Generated smoke/test artifacts (excluded)
+global_onedat_cpp.bin
+data/_smoke_cfg.json
+data/_smoke_out.csv
+server.log

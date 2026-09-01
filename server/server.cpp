@@ -510,6 +510,11 @@ int main(int argc, char** argv) {
         } else if (mode == "2byte") {
             const std::vector<uint16_t>* p = eng.twoimg_find(name);
             if (!p) {
+                // 中间波段(Img7..Img15)需先算中间波才有 2byte 版（MFC global_twoimg 同语义）
+                try { eng.compute_intermediate_waves(red_off, grn_off); } catch (...) {}
+                p = eng.twoimg_find(name);
+            }
+            if (!p) {
                 send_err(res, 400, "波段不存在: " + name);
                 return;
             }
@@ -557,6 +562,29 @@ int main(int argc, char** argv) {
         body += ",\"max\":" + std::to_string(mx);
         body += ",\"data\":\"" + data + "\"}";
         send_ok(res, body);
+    });
+
+    // ============ 文件缓存管理（mariner_reader 进程级 LRU 缓存）============
+    svr.Get("/api/cache/stats", [](const httplib::Request&, httplib::Response& res) {
+        size_t cap = singan2::file_cache_capacity();
+        std::string body = "{\"bytes\":" + std::to_string(singan2::file_cache_bytes());
+        body += ",\"capacity\":" + std::to_string(cap);
+        body += ",\"capacity_mb\":" + std::to_string(cap / (1024 * 1024));
+        body += ",\"file_count\":" + std::to_string(singan2::file_cache_file_count()) + "}";
+        send_ok(res, body);
+    });
+
+    svr.Post("/api/cache/clear", [](const httplib::Request&, httplib::Response& res) {
+        size_t cleared = singan2::file_cache_bytes();
+        singan2::file_cache_clear();
+        send_ok(res, "{\"ok\":true,\"cleared_bytes\":" + std::to_string(cleared) + "}");
+    });
+
+    svr.Post("/api/cache/set-capacity", [](const httplib::Request& req, httplib::Response& res) {
+        long long mb = json_get_int(req.body, "mb", 2048);
+        if (mb < 1) mb = 1;
+        singan2::file_cache_set_capacity(static_cast<size_t>(mb) * 1024 * 1024);
+        send_ok(res, "{\"ok\":true,\"capacity_mb\":" + std::to_string(mb) + "}");
     });
 
     // ============ P1 分析链路 ============

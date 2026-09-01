@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <list>
 #include <map>
 #include <mutex>
 
@@ -74,15 +75,79 @@ std::vector<BlockInfo> parse_blocks_data(const std::vector<uint8_t>& data) {
 
 }  // namespace
 
-// 整文件缓存：导航时反复读同一 .dat，缓存后切片近零开销。
-// std::map 节点地址稳定且从不删除，返回的引用在解锁后仍然有效。
+// ---- 文件缓存（LRU，容量上限可调）----
+// 大 .dat 一个文件即含上千枚（1000 枚 ≈ 213MB），只缓存文件本体一份，切片近零开销。
+namespace {
+
+struct FileCache {
+    std::mutex mu;
+    std::map<std::string, std::pair<std::vector<uint8_t>, std::list<std::string>::iterator>> entries;
+    std::list<std::string> lru;  // front = 最近使用
+    size_t total = 0;
+    size_t cap = [] {
+        size_t mb = 2048;  // 默认 2048MB
+        if (const char* env = std::getenv("SINGAN2_FILE_CACHE_MB")) {
+            try { mb = std::stoul(env); } catch (...) {}
+        }
+        return mb * 1024ULL * 1024ULL;
+    }();
+
+    void evict_while_over() {
+        while (total > cap && !lru.empty()) {
+            const std::string& old_key = lru.back();
+            auto it = entries.find(old_key);
+            if (it == entries.end()) { lru.pop_back(); continue; }
+            total -= it->second.first.size();
+            entries.erase(it);
+            lru.pop_back();
+        }
+    }
+};
+
+FileCache& file_cache() {
+    static FileCache c;
+    return c;
+}
+
+}  // namespace
+
 const std::vector<uint8_t>& load_file_cached(const std::string& path) {
-    static std::mutex mu;
-    static std::map<std::string, std::vector<uint8_t>> cache;
-    std::lock_guard<std::mutex> lk(mu);
-    const auto it = cache.find(path);
-    if (it != cache.end()) return it->second;
-    return cache.emplace(path, read_file(path)).first->second;
+    FileCache& c = file_cache();
+    std::lock_guard<std::mutex> lk(c.mu);
+
+    auto it = c.entries.find(path);
+    if (it != c.entries.end()) {
+        c.lru.splice(c.lru.begin(), c.lru, it->second.second);  // 提到 front
+        return it->second.first;
+    }
+    std::vector<uint8_t> data = read_file(path);
+    c.total += data.size();
+    c.lru.push_front(path);
+    auto ins = c.entries.emplace(path,
+        std::make_pair(std::move(data), c.lru.begin())).first;
+    c.evict_while_over();
+    return ins->second.first;
+}
+
+size_t file_cache_bytes() { return file_cache().total; }
+size_t file_cache_capacity() { return file_cache().cap; }
+void file_cache_set_capacity(size_t bytes) {
+    FileCache& c = file_cache();
+    std::lock_guard<std::mutex> lk(c.mu);
+    c.cap = bytes;
+    c.evict_while_over();
+}
+size_t file_cache_file_count() {
+    FileCache& c = file_cache();
+    std::lock_guard<std::mutex> lk(c.mu);
+    return c.entries.size();
+}
+void file_cache_clear() {
+    FileCache& c = file_cache();
+    std::lock_guard<std::mutex> lk(c.mu);
+    c.entries.clear();
+    c.lru.clear();
+    c.total = 0;
 }
 
 std::vector<BlockInfo> parse_blocks(const std::string& file_path) {
