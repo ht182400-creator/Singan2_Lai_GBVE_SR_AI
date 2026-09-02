@@ -7,7 +7,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://127.0.0.1:8080',
+      // 大文件上传（数十~数百 MB）需放宽超时，否则代理侧会重置连接
+      '/api': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        timeout: 600000,
+        proxyTimeout: 600000
+      },
       '/health': 'http://127.0.0.1:8080'
     }
   },

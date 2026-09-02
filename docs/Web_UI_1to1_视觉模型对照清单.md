@@ -176,7 +176,7 @@
 | 5 | ValidationCompact | Y:400 | Validation Result 文本区 | 同左 | ✅ |
 | 6 | NotesRow | Y:470 | Real Text/BV check note/... | 同左（已恢复） | ✅ |
 | 7 | ThRow | Y:540 | (TH1) IR1 IR2 UV1 | 同左 | ✅ |
-| 8 | MakeGraphRow | Y:560 | 1/2/Black/White/+Area/+TH + Start/Step/Times + Make Graph | 同左 | ✅ |
+| 8 | MakeGraphRow | Y:560 | 1/2/Black/White/+Area/+TH + Start/Step/Times + Make Graph | 同左（参数全部受控：1/2 复选、Black/White 单选、+Area/+TH 复选） | ✅ |
 | 9 | RightGraphArea | Y:590 | Statistics + Graph File(graph1.grp/Mul-X/Load/Save/ABS/Combine) + Graph编辑框(S2) | 整合块 | ✅ 结构/⚠️ y细分 |
 | 10 | ResultDetails | Y:80 (右列) | 灰底数据区 Binary file 33185... | 新建组件 | ✅ |
 
@@ -273,6 +273,7 @@
 11. **可拖拽容器系统 RC（第十三轮）**：主要控件卡片（Validation / GASOTI / Notes / Operation / Make Graph / Statistics / Graph1 / Graph2 / S2Chart / TH Row / Bottom Status / MousePoint）统一改用 `RC` 组件绝对定位 + 鼠标拖拽，标题栏/fieldset legend 为拖拽手柄，位置持久化 `localStorage`（`rc-positions`），并支持"重置布局"按钮统一复位。
 12. **GASOTI 文本区自适应**：GasotiPanel 拖拽卡片内多行文本框改为 `flex:1` + JS 按内容 `scrollHeight` 自动扩展，超长出现上下/左右滚动条，容器高度可加高以容纳更多内容。
 13. **Make Graph 下方绘图区 GraphPlot（第十三轮）**：新增 500×250 可拖拽图例/绘图容器，含 `Area / Gap` 图例行 + 网格曲线（SVG）+ 统计（Avg/Std）；默认置于 Make Graph 正下方（left:20, top:540）。
+14. **GraphPlot 改为直方图 + 双分布列表（2026-09-01）**：复刻 OLD OnDrawPaint.cpp / OnDrawGraph.cpp —— 横轴=value、纵轴=count，file1 绿色竖线 / file2 蓝色竖线（即原版"蓝色柱状线"）；右侧显示 `1/2: Avg=,Std=,Min-Max`、`Gap`、`Middle value`、`Sig`、`Area[...]`；新增 `web/src/utils/graphStats.js`（buildDistribution/avgDev/stdDev÷n-1/sigmaCompute/distributionToText/buildGraphStats）；Graph1/Graph2 编辑框在 Make Graph 有数据时显示 OLD 风格分布列表 `值 ( count ) <= rec,...`。参数映射：1/2→mgInclude1/2、Black/White→mgBw（标题标记）、+Area/+TH→mgArea/mgTh（标题开关）、Start/Step/Times→mgStart/Step/Times、1<2→mgCmp12（Gap 方向）。验证：`npm run build` 通过 + 157 用例全绿 + lint 0。
 
 ### 🟡 中优先级（像素级复核，需截图 + 视觉模型）
 11. **IR1/IR2 图区高度**：原版各 250px（88–338 / 360–610），当前 flex 等分需确认未拉长

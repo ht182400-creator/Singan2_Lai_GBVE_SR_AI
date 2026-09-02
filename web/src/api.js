@@ -25,6 +25,20 @@ export async function openSession(datPath) {
   return postJson('/api/session/open', { dat_path: datPath });
 }
 
+// 上传本地 .dat 文件（拖拽 / 文件选择），落到服务器侧 uploads/，返回 { ok, path, name }
+// 供 /api/session/open 后续按 path 打开（复刻 OLD DropDlg 拖入即加载）。
+export async function uploadDat(file) {
+  // 以二进制 body 直接发送（不再用 multipart），避免把大文件整体缓冲进内存，
+  // 文件名通过查询参数 name（URL 编码）传给流式落盘的 /api/upload 端点。
+  const r = await fetch(
+    `/api/upload?name=${encodeURIComponent(file.name)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file }
+  );
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
 // 取单波段图像：-> { width, height, encoding:'u8'|'u16le', min, max, data(base64) }
 // mode: 'raw' | '2byte' | 'intermediate'（intermediate 仅支持 Img7..Img15）
 export async function getImage({ datPath, record = 0, wave = 0, mode = 'raw',
@@ -46,6 +60,15 @@ export async function getSmallImage({ datPath, record = 0 }) {
 export async function analyzeByPath({ datPath, zfilePath, record = 0, kin = 1, country = 0 }) {
   return postJson('/api/analyze-path', {
     dat_path: datPath, zfile_path: zfilePath, record, kin, country,
+  });
+}
+
+// 批量分析（Statistics/Make Graph 用）：单文件多 record 一次请求，服务端并行计算
+// { datPath, zfilePath, start, step, count, kin, country } -> { count, record_count, results:[{record,s2,etc}] }
+export async function analyzeBatchByPath({ datPath, zfilePath, start = 0, step = 1,
+  count = 1, kin = 1, country = 0 }) {
+  return postJson('/api/analyze-batch', {
+    dat_path: datPath, zfile_path: zfilePath, start, step, count, kin, country,
   });
 }
 
@@ -74,11 +97,22 @@ export async function runImageOps({ datPath, record = 0, wave = 0, ops = [], wta
 
 // ============ P3 Graph ============
 
-// 生成图表序列（按坐标区域统计 + 列剖面）[原版 CreateGraph 未移植，近似实现]
-export async function makeGraph({ datPath, record = 0, zfilePath = '', wave = 0,
-  maxAreas = 8, wtablePath = '' }) {
+// 生成图表序列：复刻 OLD CreateGraph1 + ComputeSuppleResult —— 批量统计每 record
+// 在选定区域内的黑/白像素数。返回 { record_count, rows:[{record,value}], wave, threshold, black }
+export async function makeGraph({ datPath, zfilePath = '', wave = 0,
+  maxRecords = 16, startRecord = 0, step = 1,
+  nitiType = 'Gra+Bin', gradType = 0, gain = 1,
+  threshold = 90, colorPoint = 150,
+  areaX = 0, areaY = 0, areaW = 20, areaH = 20,
+  black = true,
+  wtablePath = '' }) {
   return postJson('/api/graph/make', {
-    dat_path: datPath, record, zfile_path: zfilePath, wave, max_areas: maxAreas,
+    dat_path: datPath, zfile_path: zfilePath, wave,
+    max_records: maxRecords, start_record: startRecord, step,
+    niti_type: nitiType, grad_type: gradType, gain,
+    threshold, color_point: colorPoint,
+    area_x: areaX, area_y: areaY, area_w: areaW, area_h: areaH,
+    black,
     wtable_path: wtablePath,
   });
 }

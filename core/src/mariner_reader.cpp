@@ -5,6 +5,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <cstdio>
 
 namespace singan2 {
 
@@ -221,6 +222,53 @@ std::vector<uint8_t> extract_small_image(const std::string& file_path, int recor
         seg[i] = seg[i + SMALL_SKIP];
     }
     return seg;
+}
+
+SmallImageValidation extract_small_image_validation(const std::string& file_path, int record_index) {
+    const std::vector<uint8_t>& data = load_file_cached(file_path);
+    SmallImageValidation out;
+    if (data.empty()) return out;
+
+    auto blocks = parse_blocks_data(data);
+    uint32_t length_mm_file_header = 0;
+    uint32_t one_data_size = 0;
+    bool first_data = false;
+    for (const auto& b : blocks) {
+        const int itype = std::get<1>(b);
+        const uint32_t dsize = std::get<2>(b);
+        if (itype == 0) {  // Head1
+            length_mm_file_header = dsize;
+            continue;
+        }
+        if (itype == 1) {  // Head2
+            if (first_data) break;
+            first_data = true;
+        }
+        one_data_size += dsize;
+    }
+    const uint32_t offset = one_data_size * static_cast<uint32_t>(record_index) +
+                            length_mm_file_header + BLOCK_HEADER;
+    if (offset + SMALL_SIZE > data.size()) return out;
+
+    const uint8_t* p = data.data() + offset;
+    // 原始(去头前)偏移，对应 OLD/MainRun.cpp 第 833-843 行
+    // （注：extract_small_image 会去掉前 SMALL_SKIP=1024 字节头，而这些字段偏移 <1024，
+    //   故必须在此用原始段直接计算，不能用去头后的小图）
+    auto u16 = [&](size_t i) -> int {
+        return (static_cast<int>(p[i]) << 8) | static_cast<int>(p[i + 1]);
+    };
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%X%X%X%X", p[4220], p[4221], p[4222], p[4223]);
+    out.han = buf;
+    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X", p[0], p[1], p[2], p[3]);
+    out.kekka = buf;
+    out.le = u16(894);
+    out.se = u16(896);
+    out.ir_adictive = u16(898);
+    out.g_adictive = u16(890);
+    out.binary_adictive = u16(892);
+    out.speed = u16(4438);
+    return out;
 }
 
 std::vector<OnebyteImage> build_onebyte_images(const std::vector<uint8_t>& global_onedat) {

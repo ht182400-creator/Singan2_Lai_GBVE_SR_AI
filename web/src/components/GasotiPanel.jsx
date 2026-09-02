@@ -3,43 +3,66 @@
  * 对应原版 resource.rc：IDC_ZAHYO(629,269) + IDC_GASOTI(629,280,180,61)，
  * 以及右侧第二组 IDC_ZAHYO2(809,269) + IDC_GASOTI2(811,280,179,60)。
  * 双栏并排，Coordinate 行共用一行以压缩高度，避免覆盖下方 Operation。
+ *
+ * 复刻 OLD Mouse.cpp MouseMove1/2：IR1/IR2 使用**同一个鼠标选区**（box），
+ * 但分别从各自的图像（imageData1 = global_twoimg / imageData2 = global_twoimg2）
+ * 读取像素值，做到「上线同步显示」。
+ * 文本格式复刻 OLD：头行 "(x,y)<-->(x+w,y+h) Black N, White M" + 全区域 %3x 十六进制矩阵。
  */
-import React from 'react';
+import React, { useMemo } from 'react';
+import { decodeImage } from '../utils/image.js';
 
-export default function GasotiPanel() {
-  const leftData = [
-    "(36,28)<-->(56,48 ) Black  0, White  0",
-    "5D 6B 6D 6F 65 5B 6B 5E 5B 71 7B 7D 3F 4F",
-    "65 7B 6F 6D 73 6D 6F 5F 79 7D 6D 55 4F 4F",
-    "69 73 71 69 6F 6B 6B 6D 73 73 6B 4B 4B 4C",
-    "63 71 71 73 71 73 6D 75 7F 6D 61 47 37 4B",
-    "5D 6D 5B 69 65 69 6D 6F 73 77 73 69 4B 4C"
-  ].join("\n");
+// 选区 box { x, y, w, h } → GASOTI 文本（%3x 十六进制像素矩阵，复刻 OLD sprintf("%3x")）
+function buildGasotiText(pixels, box) {
+  if (!pixels || !box || box.w <= 0 || box.h <= 0) {
+    return '(00,00)<-->(00,00) Black  0, White  0';
+  }
+  const { gray, width, height } = pixels;
+  const x1 = Math.max(0, Math.min(width - 1, box.x));
+  const y1 = Math.max(0, Math.min(height - 1, box.y));
+  const x2 = Math.max(0, Math.min(width - 1, box.x + box.w - 1));
+  const y2 = Math.max(0, Math.min(height - 1, box.y + box.h - 1));
+  let black = 0;
+  let white = 0;
+  const lines = [];
+  for (let y = y1; y <= y2; y++) {
+    let row = '';
+    for (let x = x1; x <= x2; x++) {
+      const v = gray[y * width + x];
+      // 复刻 OLD：%3x（3 字符右对齐，空格补齐，小写）；黑白按 0/255 统计
+      row += v.toString(16).padStart(3, ' ');
+      if (v === 0) black++;
+      else if (v === 255) white++;
+    }
+    lines.push(row);
+  }
+  const fmt = (n) => String(n).padStart(2, '0');
+  const head = `(${fmt(x1)},${fmt(y1)})<-->(${fmt(box.x + box.w)},${fmt(box.y + box.h)}) Black ${String(black).padStart(3, ' ')}, White ${String(white).padStart(3, ' ')}`;
+  return [head, ...lines].join('\n');
+}
 
-  const rightData = [
-    "(36,28)<-->(56,48 ) Black  0, White  0",
-    "77 7D 77 77 83 81 87 89 83 73 69 5D 67 4C",
-    "6D 65 83 79 79 7F 7F 85 91 83 7B 6B 6B 4C",
-    "67 7B 7D 7D 7B 7B 87 8B 8B 75 77 5D 5F 4C",
-    "65 77 7D 7F 7D 75 83 83 8B 85 7F 6F 6F 4C",
-    "6B 7D 7B 83 77 79 89 83 81 7B 6B 6F 6F 4C"
-  ].join("\n");
+export default function GasotiPanel({ imageData1, imageData2, box, zfileName = '85901.txt' }) {
+  const pixels1 = useMemo(() => decodeImage(imageData1), [imageData1]);
+  const pixels2 = useMemo(() => decodeImage(imageData2), [imageData2]);
+  // IR1 / IR2 共用同一选区 box，分别读各自图像 → 上下同步
+  const leftData = useMemo(() => buildGasotiText(pixels1, box), [pixels1, box]);
+  const rightData = useMemo(() => buildGasotiText(pixels2, box), [pixels2, box]);
 
   return (
     <fieldset className="gasoti-panel">
       <legend>Genuine Note (GASOTI)</legend>
       <div className="gasoti-head">
-        <span className="bs-lbl">Coordinate</span>
-        <input className="gasoti-edit" defaultValue="85901.txt" readOnly />
-        <span className="bs-lbl">Coordinate</span>
-        <input className="gasoti-edit" defaultValue="85901.txt" readOnly />
+        <span className="bs-lbl">IR1</span>
+        <input className="gasoti-edit" value={zfileName} readOnly title="IR1 区域对应 zfile" />
+        <span className="bs-lbl">IR2</span>
+        <input className="gasoti-edit" value={zfileName} readOnly title="IR2 区域对应 zfile" />
       </div>
       <div className="gasoti-columns">
         <div className="gasoti-col">
-          <textarea className="gasoti-area" defaultValue={leftData} readOnly />
+          <textarea className="gasoti-area" value={leftData} readOnly />
         </div>
         <div className="gasoti-col">
-          <textarea className="gasoti-area" defaultValue={rightData} readOnly />
+          <textarea className="gasoti-area" value={rightData} readOnly />
         </div>
       </div>
     </fieldset>

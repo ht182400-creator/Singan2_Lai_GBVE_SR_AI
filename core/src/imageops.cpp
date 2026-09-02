@@ -187,6 +187,155 @@ void ImageEngine::smooth() {
     to_2byte_orver_write(tab_no, result);
 }
 
+// --------------- 复刻 OLD LAPLACIAN.CPP / PREWITT.CPP / NITI.CPP / smooth_median.cpp ---------------
+
+void ImageEngine::laplacian(int amp) {
+    const std::vector<uint8_t>& img1byte = oneimg_at(tab_no);
+    const std::vector<uint16_t>& img2byte = twoimg_at(tab_no);
+    static const int c[9] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
+    std::vector<int64_t> padded((Y_SIZE + 2) * (X_SIZE + 2), 0);
+    for (int i = 0; i < Y_SIZE; i++)
+        for (int j = 0; j < X_SIZE; j++)
+            padded[(i + 1) * (X_SIZE + 2) + (j + 1)] = img1byte[i * X_SIZE + j];
+
+    const int N = Y_SIZE * X_SIZE;
+    std::vector<int64_t> zz(N, 0);
+    for (int i = 0; i < Y_SIZE; i++) {
+        for (int j = 0; j < X_SIZE; j++) {
+            int64_t z = 0;
+            for (int ki = 0; ki < 3; ki++)
+                for (int kj = 0; kj < 3; kj++)
+                    z += c[ki * 3 + kj] * padded[(i + ki) * (X_SIZE + 2) + (j + kj)];
+            zz[i * X_SIZE + j] = z;
+        }
+    }
+    std::vector<uint16_t> result = img2byte;
+    for (int i = 1; i < Y_SIZE - 1; i++) {
+        for (int j = 1; j < X_SIZE - 1; j++) {
+            int64_t v = amp * zz[i * X_SIZE + j];
+            if (v < 0) v = -v;
+            if (v > 255) v = 255;
+            result[i * X_SIZE + j] = static_cast<uint16_t>(v);
+        }
+    }
+    to_2byte_orver_write(tab_no, result);
+}
+
+void ImageEngine::prewitt(int amp) {
+    const std::vector<uint8_t>& img1byte = oneimg_at(tab_no);
+    const std::vector<uint16_t>& img2byte = twoimg_at(tab_no);
+    std::vector<int64_t> padded((Y_SIZE + 2) * (X_SIZE + 2), 0);
+    for (int i = 0; i < Y_SIZE; i++)
+        for (int j = 0; j < X_SIZE; j++)
+            padded[(i + 1) * (X_SIZE + 2) + (j + 1)] = img1byte[i * X_SIZE + j];
+
+    auto cell = [&](int i, int j, int k) -> int64_t {
+        return padded[(i + k / 3) * (X_SIZE + 2) + (j + k % 3)];
+    };
+    const int N = Y_SIZE * X_SIZE;
+    std::vector<int64_t> zz(N, 0);
+    for (int i = 1; i < Y_SIZE - 1; i++) {
+        for (int j = 1; j < X_SIZE - 1; j++) {
+            int64_t d[9];
+            for (int k = 0; k < 9; k++) d[k] = cell(i, j, k);
+            int64_t m[8];
+            m[0] = d[0] + d[1] + d[2] + d[3] - 2 * d[4] + d[5] - d[6] - d[7] - d[8];
+            m[1] = d[0] + d[1] + d[2] + d[3] - 2 * d[4] - d[5] + d[6] - d[7] - d[8];
+            m[2] = d[0] - d[1] - d[2] + d[3] - 2 * d[4] - d[5] + d[6] + d[7] + d[8];
+            m[3] = d[0] - d[1] - d[2] + d[3] - 2 * d[4] - d[5] + d[6] + d[7] + d[8];
+            m[4] = -d[0] - d[1] - d[2] + d[3] - 2 * d[4] + d[5] + d[6] + d[7] + d[8];
+            m[5] = -d[0] - d[1] + d[2] - d[3] - 2 * d[4] + d[5] - d[6] + d[7] + d[8];
+            m[6] = -d[0] + d[1] + d[2] - d[3] - 2 * d[4] + d[5] - d[6] + d[7] + d[8];
+            m[7] = d[0] + d[1] + d[2] - d[3] - 2 * d[4] + d[5] - d[6] - d[7] + d[8];
+            int64_t maxv = 0;
+            for (int k = 0; k < 8; k++) if (maxv < m[k]) maxv = m[k];
+            zz[i * X_SIZE + j] = maxv;
+        }
+    }
+    std::vector<uint16_t> result = img2byte;
+    for (int i = 1; i < Y_SIZE - 1; i++) {
+        for (int j = 1; j < X_SIZE - 1; j++) {
+            int64_t v = amp * zz[i * X_SIZE + j];
+            if (v > 255) v = 255;
+            result[i * X_SIZE + j] = static_cast<uint16_t>(v);
+        }
+    }
+    to_2byte_orver_write(tab_no, result);
+}
+
+void ImageEngine::niblack(int s) {
+    if (s <= 2 || (s % 2) == 0) return;
+    const std::vector<uint8_t>& img1byte = oneimg_at(tab_no);
+    const int N = Y_SIZE * X_SIZE;
+    std::vector<uint16_t> out(N, 0);
+    int move = s / 2;
+    for (int i = 0; i < Y_SIZE; i++) {
+        for (int j = 0; j < X_SIZE; j++) {
+            if (s > i || s > j || s > i + Y_SIZE || s > j + X_SIZE) continue;
+            long long ave = 0, b = 0;
+            for (int k = 0; k < s; k++) {
+                for (int l = 0; l < s; l++) {
+                    int v = img1byte[(i - move + k) * X_SIZE + (j - move + l)];
+                    ave += v;
+                    b += v * v;
+                }
+            }
+            int eria = s * s;
+            ave /= eria;
+            b /= eria;
+            int threshold = static_cast<int>(b - ave * ave);
+            int v = img1byte[i * X_SIZE + j];
+            out[i * X_SIZE + j] = (v >= threshold) ? 0xff : 0;
+        }
+    }
+    to_2byte_orver_write(tab_no, out);
+}
+
+void ImageEngine::median() {
+    const std::vector<uint8_t>& img1byte = oneimg_at(tab_no);
+    const std::vector<uint16_t>& img2byte = twoimg_at(tab_no);
+    const int N = Y_SIZE * X_SIZE;
+    std::vector<uint16_t> out(N, 0);
+    for (int i = 1; i < Y_SIZE - 1; i++) {
+        for (int j = 1; j < X_SIZE - 1; j++) {
+            uint8_t c[9] = {
+                img1byte[(i - 1) * X_SIZE + (j - 1)], img1byte[(i - 1) * X_SIZE + j], img1byte[(i - 1) * X_SIZE + (j + 1)],
+                img1byte[i * X_SIZE + (j - 1)], img1byte[i * X_SIZE + j], img1byte[i * X_SIZE + (j + 1)],
+                img1byte[(i + 1) * X_SIZE + (j - 1)], img1byte[(i + 1) * X_SIZE + j], img1byte[(i + 1) * X_SIZE + (j + 1)]
+            };
+            for (int k = 0; k < 8; k++) {
+                for (int l = 0; l < 8 - k; l++) {
+                    if (c[l + 1] < c[l]) {
+                        uint8_t tmp = c[l + 1];
+                        c[l + 1] = c[l];
+                        c[l] = tmp;
+                    }
+                }
+            }
+            out[i * X_SIZE + j] = c[4];
+        }
+    }
+    std::vector<uint16_t> result = img2byte;
+    for (int i = 1; i < Y_SIZE - 1; i++)
+        for (int j = 1; j < X_SIZE - 1; j++)
+            result[i * X_SIZE + j] = out[i * X_SIZE + j];
+    to_2byte_orver_write(tab_no, result);
+}
+
+void ImageEngine::color(int offset) {
+    const std::vector<uint8_t>& img1byte = oneimg_at(tab_no);
+    const std::vector<uint16_t>& img2byte = twoimg_at(tab_no);
+    const int N = Y_SIZE * X_SIZE;
+    std::vector<uint16_t> result = img2byte;
+    for (int k = 0; k < N; k++) {
+        int v = static_cast<int>(img1byte[k]) + offset;
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        result[k] = static_cast<uint16_t>(v);
+    }
+    to_2byte_orver_write(tab_no, result);
+}
+
 int ImageEngine::rute(int u_bunsan, int left, int right, const WTable& wt) {
     int center = 0x80;
     int w2 = static_cast<int>(wt.table[2]);

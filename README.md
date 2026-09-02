@@ -13,7 +13,8 @@ SINGAN2 算法的现代化重构版本：纯 C++17 算法核心 + HTTP API + Web
 | M1 解析层 | `mariner_reader` + `readzfile` C++ 移植 + 对拍 | ✅ 通过 |
 | M2 算法核心 | `imageops` + `wtable` + `c_si2` + `all32` C++ 移植 | ✅ 通过（`run_algorithm` 输出与 poc golden 逐项一致） |
 | M3 HTTP API | C++ HTTP server（cpp-httplib）暴露算法 | ✅ 通过（`server/smoke_test.py` 全 PASS） |
-| M4 Web 前端 | React + ECharts 调用 API（1:1 复刻原版 MFC 主界面） | ✅ 完成（含 25 文件 / 107 用例 Vitest 测试全绿） |
+| M4 Web 前端 | React + ECharts 调用 API（1:1 复刻原版 MFC 主界面） | ✅ 完成（P0–P5 全链路：session/image/imageops/graph/zfile/export/config/analyze-batch/IR2 双文件） |
+| M5 批量统计 | Statistics / Make Graph 批量多 record 并行计算 + Result Details + S2Chart 跨 record 曲线 | ✅ 完成（服务端线程池并行，前端 Vitest 37 文件全绿） |
 
 ## 目录结构
 
@@ -24,7 +25,7 @@ Singan2_Lai_GBVE_SR_AI/
 │   └── src/                 # 实现
 ├── server/                  # HTTP API（M3，cpp-httplib）
 ├── web/                     # React 前端（M4，Vite + ECharts）
-│   └── src/components/      # 21+ 个 UI 组件（绝对定位 1:1 复刻）
+│   └── src/components/      # 30+ 个 UI 组件（绝对定位 1:1 复刻，含 Graph 结果面板 / S2Chart / IR1+IR2 双文件）
 ├── tests/                   # 对拍测试 (test_parse.cpp)
 ├── poc/                     # Python 参考实现 + golden 输出
 │   ├── parse/  algo/  tools/
@@ -51,15 +52,31 @@ cmake --build build --config Debug
 > **x64 陷阱**：若 `build/` 曾用 Win32 配置过，重配 x64 会报 "platform used previously" 冲突，
 > 需先 `Remove-Item -Recurse -Force build` 再重新 `cmake -S . -B build -A x64`。
 
-## HTTP API（M3）
+## HTTP API（P0–P5）
 
-`server/server.cpp` 暴露的端点：
+`server/server.cpp`（cpp-httplib）暴露的端点，**web 前端 `web/src/api.js` 一一对应**：
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET  | `/health` | 健康检查 |
-| POST | `/api/analyze-path` | 按路径分析数据 |
-| POST | `/api/analyze` | multipart 上传文件分析 |
+| 方法 | 路径 | 阶段 | 说明 |
+|------|------|------|------|
+| GET  | `/health` | — | 健康检查 |
+| POST | `/api/session/open` | P0 | 打开 .dat，返回 `record_count / wave_count / waves` |
+| POST | `/api/upload` | P0 | 流式上传本地 .dat 到服务器 `uploads/`（避免大文件整体入内存） |
+| POST | `/api/image` | P0 | 取单波段图像（raw / 2byte / intermediate） |
+| POST | `/api/small-image` | P0 | 取小图（SMALL_SIZE） |
+| POST | `/api/analyze-path` | P1 | 按路径分析单 record |
+| POST | `/api/analyze-batch` | P1 | 批量分析（Statistics / Make Graph 用）：单文件多 record 一次请求，服务端线程池并行 |
+| POST | `/api/analyze` | P1 | multipart 上传文件分析 |
+| POST | `/api/imageops` | P2 | 对记录/波段应用算子（gradient / niti / smooth …） |
+| POST | `/api/graph/make` | P3 | 生成图表序列（黑/白像素数，复刻 CreateGraph1 + ComputeSuppleResult） |
+| POST | `/api/graph/combine` | P3 | 序列合成（diff / max / min / avg） |
+| POST | `/api/graph/save` | P3 | 保存 .grp（JSON 文本） |
+| POST | `/api/graph/load` | P3 | 读取 .grp |
+| POST | `/api/zfile/parse` | P4 | 解析坐标文件（shift_jis） |
+| POST | `/api/atb/load` | P4 | 加载 ATB |
+| POST | `/api/vtb/load` | P4 | 加载 VTB |
+| POST | `/api/export/csv` | P5 | 导出 CSV |
+| POST | `/api/config/save` | P5 | 保存配置 |
+| POST | `/api/config/load` | P5 | 读取配置 |
 
 冒烟测试（需先启动 `singan2_server.exe` 监听 `:8080`）：
 
@@ -67,13 +84,16 @@ cmake --build build --config Debug
 python server/smoke_test.py
 ```
 
+> 批量分析 `/api/analyze-batch` 入参：`{ dat_path, zfile_path, start, step, count, kin, country }`；
+> 返回 `{ count, record_count, results:[{ record, s2:[32], etc:[12], error }] }`。服务端按 `available = max(1, (record_count-1-start)/step + 1)` 截断 `count`，并用线程池并行计算，失败记录写入 `error` 字段而非中断整批。
+
 ## Web 前端（M4）
 
 ```bash
 cd web
 npm install
 npm run dev          # Vite 开发服务器 @ :5173（已配 /api -> :8080 代理）
-npm test             # Vitest 全量测试（25 文件 / 107 用例）
+npm test             # Vitest 全量测试（37 文件，全部用例全绿）
 ```
 
 ### Web 布局冻结约束（重要）
@@ -108,7 +128,7 @@ cd poc && python run_poc.py --dat ../data/2A_DA_111017_115542.dat \
 前端回归（Vitest）：
 
 ```bash
-cd web && npm test        # ✅ 25 文件 / 107 用例全绿
+cd web && npm test        # ✅ 37 文件，全部用例全绿
 ```
 
 ## 编码约定
@@ -124,5 +144,5 @@ cd web && npm test        # ✅ 25 文件 / 107 用例全绿
 - 仓库默认分支：`main`（原 `master` 已本地改名对齐）。
 - 完整工程已通过 GitHub API（Blob/Tree/Commit）上传至 `main`，commit 含全部源码、数据样本、文档。
 - 已知限制：单个 GitHub blob ≤ 25MB，**超大会话导出 JSON（>150MB）不参与上传**，按需用 Git LFS 或拆分归档。
-- `.gitignore` 已排除 `node_modules/`、`build/`、`dist/`、`.codebuddy/`、`*.pyc`、`*.test.*`、`tests/`、`data/` 下 >10MB 样本等大体积 / 生成物。
+- `.gitignore` 已排除 `node_modules/`、`build/`、`dist/`、`.codebuddy/`、`*.pyc`、`*.test.*`、`tests/`、`uploads/`、`data/*.dat`（运行期上传/样本大体积二进制）等大体积 / 生成物；仓库只保留源码、文档与小型样本。
 - 本地 git 直连 GitHub（443）在部分网络环境下不稳定时，可复用 GitHub REST API 方式同步。

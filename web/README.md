@@ -30,8 +30,8 @@ npm run preview  # 本地预览构建产物
 | 结果列表视图（S2[1..16] + etc[10,11]） | 默认视图 | ✅ |
 | 结果图像视图（S2 波段条形图） | 右键 `Switch View` | ✅ |
 | 右键菜单 `Grid` / `MousePoint(V)` / `Show Area`(三态) / `Switch View` / `Re-Load Coordinate` / `Restore` | 主区右键 | ✅ |
-| 右键 `Image Prosess ▸ Gradient/Binary/Noise` | 右键级联 | ⏳ 占位（待接 M2 `imageops`） |
-| `Show Information` / `Detail Setting` | 右键 | ⏳ 占位（M4 迭代中） |
+| 右键 `Image Prosess ▸ Gradient/Binary/Noise/Restore` | 右键级联 | ✅（接 M2 `imageops`） |
+| `Show Information` / `Detail Setting` | 右键 | ✅（基础信息 / 红绿 offset 设置） |
 | `View All Result` → 导出 `a.csv` | 列表视图底部按钮 | ✅ |
 
 ## 目录
@@ -40,6 +40,6 @@ npm run preview  # 本地预览构建产物
 - `src/styles.css` — 贴近原版灰色 UI 样式
 
 ## 待办（M4 迭代）
-1. `Image Prosess` 后处理接入 `core/src/imageops.cpp`（Gradient / Binary / Noise）。
-2. `Show Information` / `Detail Setting` 对话框（对应原版 `IDD_J_DLG` / `IDD_S_SET_DLG`）。
-3. 多枚导航（左/右箭头）、图形窗口（原版 Graph 自绘区）复刻为 ECharts 多曲线。
+1. 多枚导航（左/右箭头）、图形窗口（原版 Graph 自绘区）复刻为 ECharts 多曲线。
+2. Show Information 对话框可进一步复刻原版 `IDD_J_DLG` 的鼠标区域放大图。
+3. Detail Setting 对话框可进一步复刻原版 `IDD_S_SET_DLG` 的 overwrite / country / 坐标显示选项。

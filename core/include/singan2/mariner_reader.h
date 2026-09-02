@@ -33,6 +33,18 @@ std::vector<uint8_t> extract_mm1_side(const std::string& file_path, int record_i
 // 提取指定枚的 global_small_image(SMALL_SIZE 字节)
 std::vector<uint8_t> extract_small_image(const std::string& file_path, int record_index = 0);
 
+// 按 OLD/MainRun.cpp 第 833-843 行原版偏移，从原始(去头前)小图段解析 Validation Result 字段
+struct SmallImageValidation {
+  std::string han;             // [4220..4223]  %X%X%X%X
+  std::string kekka;           // [0..3]        %02X%02X%02X%02X
+  int le = 0, se = 0;          // [894..895] / [896..897]
+  int ir_adictive = 0;         // [898..899]
+  int g_adictive = 0;          // [890..891]
+  int binary_adictive = 0;     // [892..893]
+  int speed = 0;               // [4438..4439]
+};
+SmallImageValidation extract_small_image_validation(const std::string& file_path, int record_index = 0);
+
 // 单波段 8bit 图像
 struct OnebyteImage {
     std::string name;             // 如 "Img1"

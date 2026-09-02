@@ -18,10 +18,10 @@ body {
   position: relative;
   left: 0; top: 0;
   width: 1800px;
-  height: 1050px;
+  min-height: 1050px;
   background: #c0c0c0;
   border: 1px solid #555;
-  overflow: hidden;
+  overflow-y: auto;
   transform: scale(min(100vw / 1800px, 100vh / 1050px));
   transform-origin: top left;
 }
@@ -140,7 +140,43 @@ body {
   width: 900px;
   height: 956px;
   background: #ece9d8;
-  overflow: hidden;
+  overflow: auto; /* 2026-09-01：右侧容器太多，允许纵向/横向滚动，避免全部挤在狭小区域 */
+}
+
+/* 右侧滚动条样式（Win9x/古典灰色风格） */
+.right-area::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: #ece9d8;
+}
+.right-area::-webkit-scrollbar-track {
+  background: #f1efe2;
+  border-left: 1px solid #aca899;
+  border-top: 1px solid #aca899;
+}
+.right-area::-webkit-scrollbar-thumb {
+  background: #c9c5b8;
+  border: 1px solid #8a8678;
+  border-radius: 0;
+}
+.right-area::-webkit-scrollbar-thumb:hover {
+  background: #b0ac9f;
+}
+.right-area::-webkit-scrollbar-corner {
+  background: #ece9d8;
+}
+
+/* 强制右侧内容出现滚动留白：向下/向右延伸，使滚动条真正可用 */
+.right-area-spacer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  transform: translate(1000px, 1400px);
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
 }
 /* === 所有右侧子面板：绝对定位，坐标对应 resource.rc ===
  * 折算公式（唯一权威）：原版右侧起点 X=613；Web right-area 宽 900 = 原版右侧宽 666 × 1.201（2026-08-23 扩宽）
@@ -154,39 +190,157 @@ body {
 .rc input, .rc textarea { cursor: text; }
 .rc button { cursor: pointer; }
 .rc-mouse-point { left: 22px; top: 0px; width: 96px; }        /* rc 631,1 (GB 80→96)；2026-08-23 内容上提置顶 */
-.rc-reduction-1 { left: 586px; top: 3px; width: 97px; z-index: 5; }    /* rc 1101,2 (GB 81→97) */
-.rc-reduction-2 { left: 683px; top: 3px; width: 102px; z-index: 5; }   /* rc 1182,2 (GB 85→102) */
+.rc-reduction { left: 586px; top: 3px; width: 200px; height: 250px; z-index: 5; } /* rc 1101,2 合并面板；高度 +100 让小图与 Compare Rec 更易看清 */
+
+/* === Reduction Image 1/2 合并面板 === */
+.reduction-panel { display: flex; flex-direction: column; height: 100%; padding: 2px; box-sizing: border-box; border: 2px groove #d4d0c8; background: #d4d0c8; }
+.reduction-panel legend { font-size: 10px; font-weight: 700; padding: 0 4px; }
+.rp-grid { display: flex; gap: 4px; flex: 1; min-height: 0; }
+.rp-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rp-col-title { font-size: 9px; text-align: center; font-weight: 700; color: #222; }
+.rp-canvas { width: 100%; flex: 1; min-height: 0; background: #808080; border: 1px solid #555; image-rendering: pixelated; }
+.rp-footer { display: flex; align-items: center; gap: 8px; font-size: 11px; padding-top: 6px; }
+.rp-compare-label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; }
+.rp-compare-label input { width: 60px; height: 22px; font-size: 12px; padding: 2px 4px; }
+.rp-result { font-weight: 700; }
+.rp-result[data-match="true"] { color: #060; }
+.rp-result[data-match="false"] { color: #600; }
+.rp-loading { color: #666; font-style: italic; }
+
 .rc-image-processing { left: 20px; top: 103px; width: 340px; }   /* rc 630,77 (GB 283→340) */
 .rc-validation { left: 20px; top: 264px; width: 444px; padding-bottom: 40px; }        /* rc 630,216 (到 ~887) */
 /* 红框区域组件：整体紧凑上移，贴合原始 UI 相对布局 */
 .rc-gasoti { left: 19px; top: 390px; width: 453px; padding-bottom: 20px; }
 .rc-graph-file { left: 461px; top: 350px; width: 307px; }       /* 与 GASOTI 同排 */
-.rc-make-graph { left: 20px; top: 500px; width: 453px; }
-.rc-statistics { left: 485px; top: 395px; width: 158px; }       /* 与 Make Graph 同排 */
-.rc-operation { left: 220px; top: 585px; width: 340px; }         /* 紧贴 MakeGraph */
-.rc-graph1 { left: 547px; top: 475px; width: 185px; height: 140px; }
-.rc-graph2 { left: 547px; top: 620px; width: 186px; height: 140px; }
-.rc-graph-plot { left: 20px; top: 540px; width: 500px; height: 250px; z-index: 6; }
+/* Make Graph 容器：合并原 StatisticsRow + MakeGraphRow + GraphPlot 三个子组件 */
+.rc-make-graph { left: 20px; top: 500px; width: 520px; height: 360px; z-index: 6; display: flex; flex-direction: column; }
+.rc-make-graph .mg-params { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 3px 6px; background: #d4d0c8; border-bottom: 1px solid #888; font-size: 11px; }
+.rc-make-graph .mg-params input[type=number] { width: 44px; height: 16px; font-size: 10px; padding: 1px; }
+.rc-make-graph .mg-fn-select { height: 18px; font-size: 10px; max-width: 76px; }
+.rc-make-graph .mg-graph-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #fff; }
+.rc-make-graph .graph-plot { flex: 1; min-height: 0; }
+/* Operation 移到 Make Graph 正下方；Table Function 下拉已移入 Operation History 容器（对应原版 resource.rc x=715,y=55），此处恢复原尺寸 */
+.rc-operation { left: 20px; top: 870px; width: 520px; height: 180px; z-index: 5; }
+/* Graph1/Graph2/Result Details 合并为单一「Graph 结果」面板（更友好、减少零散容器） */
+.rc-graph-result { left: 555px; top: 500px; width: 325px; height: 840px; display: flex; flex-direction: column; }
 .graph-plot { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #fff; font-size: 10px; }
 .gp-header { display: flex; justify-content: space-between; gap: 6px; padding: 1px 4px; border-bottom: 1px solid #999; font-family: monospace; white-space: nowrap; }
 .gp-body { flex: 1; display: flex; min-height: 0; }
 .gp-svg { flex: 1; width: auto; height: 100%; background: #fff; }
 .gp-stats { width: 150px; padding: 2px 4px; font-family: monospace; border-left: 1px solid #ccc; white-space: nowrap; }
-.rc-s2chart { left: 732px; top: 475px; width: 68px; height: 285px; }     /* 与 Graph1 顶部对齐 */
-.rc-notes { left: 220px; top: 770px; width: 340px; }             /* 贴合 Operation */
-.rc-th-row { left: 20px; top: 700px; width: 340px; }            /* 贴合 Notes */
-.rc-result { left: 380px; top: 775px; width: 420px; }         /* 移至 Graph2 下方中央 */
+/* S2Chart：加高以显示更多 record 值；Operation 在其上方，互不重叠 */
+.rc-s2chart { left: 555px; top: 1360px; width: 325px; height: 280px; z-index: 5; display: flex; flex-direction: column; }
+.rc-s2chart.dual { height: 525px; } /* 双文件时加高，让 IR1/IR2 各图表都有足够显示空间 */
+.rc-s2chart > .s2-chart { flex: 1; min-height: 0; }
+/* Notes / TH 行下移到 S2Chart 下方 */
+.rc-notes { left: 20px; top: 1890px; width: 520px; height: 50px; z-index: 4; }
+.rc-th-row { left: 555px; top: 1890px; width: 325px; height: 50px; z-index: 4; }
 
 /* 原版真实存在但曾被误删的区域（resource.rc 证实） */
 .rc-vtb { left: 362px; top: 197px; width: 438px; height: 161px; }  /* rc 915,147 VTB 区 (右对齐至 800) */
 .rc-atb { left: 364px; top: 5px; width: 217px; }                /* rc 917,4 ATB 区 (181→217) */
-.rc-op-history { left: 122px; top: 8px; width: 237px; }         /* rc 714,6 Operation History (197→237) */
+.rc-op-history { left: 122px; top: 8px; width: 300px; z-index: 6; }  /* rc 714,6 Operation History，加宽以容纳 Table Function 下拉(原版 715,55 宽197) */
 .op-history-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
 .op-history-list { width: 100%; height: 54px; font-size: 10px; }
+.op-history-table { margin: 2px 0; }
+.op-history-table label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-weight: 600; white-space: nowrap; font-size: 11px; }
+.op-history-table .op-table-select { width: 100%; }
 .graph-black-edit {
   width: 100%; height: 100%; box-sizing: border-box;
   background: #1a1a1a; color: #c8c8c8; border: 1px solid #000;
   font-family: monospace; font-size: 9px; line-height: 1.2; resize: none;
+}
+/* S2 txt 列表：原版 S2 记录输出（IR1/IR2 同步显示） */
+.s2-txtlist {
+  width: 100%; flex: 1; min-height: 80px; box-sizing: border-box;
+  background: #ffffff; color: #222; border: 1px solid #888;
+  font-family: monospace; font-size: 9px; line-height: 1.15; resize: none;
+  margin-top: 2px; padding: 2px 3px; overflow: auto;
+}
+.s2-chart { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.s2-chart .s2-header {
+  font-size: 11px; font-weight: 700; padding: 2px 4px;
+  background: #d4d0c8; border-bottom: 1px solid #888;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.s2-chart .s2-svg { width: 100%; flex: 0 0 45%; min-height: 0; }
+.s2-chart .s2-legend { font-size: 9px; color: #666; padding: 1px 2px; }
+.s2-chart .s2-help {
+  font-size: 9px; color: #444; padding: 1px 3px;
+  background: #f9f9f5; border-bottom: 1px solid #ccc;
+  line-height: 1.3;
+}
+.s2-chart .s2-txtlist { font-size: 10px; line-height: 1.25; flex: 1; min-height: 0; overflow: auto; }
+.s2-chart .s2-empty {
+  flex: 0 0 45%; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #c00; background: #fff0f0;
+  border: 1px dashed #c00; margin: 2px 0; padding: 4px;
+  text-align: center;
+}
+/* Result Details 占位 */
+.rd-empty { font-size: 10px; color: #888; padding: 6px; text-align: center; }
+.rd-empty.rd-warn { color: #c00; background: #fff0f0; border: 1px dashed #c00; }
+
+/* === Graph 结果整合面板（Graph1/Graph2/Result Details） === */
+.graph-result-panel {
+  display: flex; flex-direction: column; height: 100%; overflow: hidden;
+  background: #ece9d8; padding: 2px 4px 4px;
+}
+.grp-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; font-weight: 700; padding: 2px 4px;
+  background: #d4d0c8; border: 1px solid #888; margin-bottom: 2px;
+}
+.grp-fn { font-family: monospace; color: #0a246a; font-weight: 700; }
+.grp-split {
+  display: flex; gap: 4px; height: 120px; min-height: 120px; margin-bottom: 2px;
+}
+.grp-box {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  border: 1px solid #777; padding: 2px; margin: 0;
+  background: #f5f5f0;
+}
+.grp-box legend { font-size: 10px; font-weight: 700; padding: 0 3px; }
+.grp-box textarea {
+  flex: 1; min-height: 0; width: 100%; box-sizing: border-box;
+  border: 1px solid #aaa; background: #fff; color: #222;
+  font-family: monospace; font-size: 10px; line-height: 1.3; resize: none; padding: 2px 3px;
+}
+.graph-result-panel .result-details {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  border: 1px solid #777; background: #f5f5f0; margin: 0; padding: 2px 4px;
+  overflow: hidden;
+}
+.graph-result-panel .result-details legend { font-size: 10px; font-weight: 700; }
+.grp-result-split {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px;
+}
+.grp-result-split .result-details { flex: 1; min-height: 0; }
+.rd-table-wrapper {
+  flex: 1; min-height: 120px; max-height: 460px; overflow: auto;
+  border: 1px solid #aaa; background: #fff; margin: 2px 0;
+  scrollbar-width: 12px;
+}
+.rd-table-wrapper::-webkit-scrollbar { width: 12px; background: #f0f0f0; }
+.rd-table-wrapper::-webkit-scrollbar-thumb { background: #888; border-radius: 2px; }
+.rd-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.rd-table th {
+  position: sticky; top: 0;
+  background: #ece9d8; border: 1px solid #aaa; padding: 2px 4px; text-align: center;
+}
+.rd-table td { border: 1px solid #aaa; padding: 1px 4px; text-align: center; }
+.grp-help {
+  font-size: 8px; color: #444; padding: 2px 4px; margin-top: 2px;
+  background: #f0efe8; border-top: 1px solid #bbb;
+  line-height: 1.25;
+  white-space: normal;
+  flex-shrink: 0;
+}
+.mg-hint {
+  font-size: 9px; color: #555; margin-left: 2px; padding: 1px 3px;
+  background: #e8e6de; border: 1px solid #bbb; border-radius: 2px;
+  cursor: help;
 }
 
 /* === Image Pane === */
@@ -217,6 +371,59 @@ body {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
   image-rendering: pixelated;
+}
+
+/* Grid 覆盖层：1:1 复刻 OLD OnDrawLine.cpp 5px 间距网格，默认 1px 黑线（同原版 HDC 默认画笔） */
+.image-pane-grid {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right, transparent 0 4px, rgba(0, 0, 0, 0.55) 4px 5px),
+    repeating-linear-gradient(to bottom, transparent 0 4px, rgba(0, 0, 0, 0.55) 4px 5px);
+}
+
+/* 鼠标点覆盖层：复刻 OLD Mouse.cpp MouseMove1/2（红十字线 + 白色 20×20 框） */
+.image-pane-cross-h {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: #ff0000;   /* OLD RGB(255,0,0) 十字横线（全宽） */
+  pointer-events: none;
+}
+.image-pane-cross-v {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 1px;
+  background: #ff0000;   /* OLD RGB(255,0,0) 十字竖线（全高） */
+  pointer-events: none;
+}
+.image-pane-box {
+  position: absolute;
+  border: 1px solid #ffffff;  /* OLD RGB(255,255,255) 白色选择框 */
+  box-sizing: border-box;
+  pointer-events: none;
+}
+/* 自由手拖拽中的青色边框（OLD Draw_Eria RGB 0,255,255） */
+.image-pane-box-drag {
+  border-color: #00ffff;
+}
+/* 青色调绘格线：竖线 5px 间隔 */
+.image-pane-hatch-v {
+  position: absolute;
+  width: 1px;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 4px, #00ffff 4px 5px);
+  pointer-events: none;
+  opacity: 0.6;
+}
+/* 青色调绘格线：横线 5px 间隔 */
+.image-pane-hatch-h {
+  position: absolute;
+  height: 1px;
+  background-image: repeating-linear-gradient(to right, transparent 0 4px, #00ffff 4px 5px);
+  pointer-events: none;
+  opacity: 0.6;
 }
 .image-pane-info {
   margin-left: 6px; font-size: 10px; color: #9cf; font-family: monospace;
@@ -250,7 +457,13 @@ body {
 .data-label { font-size: 11px; font-weight: 700; margin-left: 4px; display: inline-flex; align-items: center; gap: 3px; }
 .data-combo { padding: 1px; min-width: 70px; }
 .data-count { width: 40px; padding: 1px; }
-.data-path { flex: 0 0 394px; width: 394px; padding: 1px 4px; font-family: monospace; font-size: 10px; min-width: 0; }
+.data-path-combo { flex: 0 0 394px; position: relative; display: flex; align-items: center; }
+.data-path { flex: 1; min-width: 0; padding: 1px 4px; font-family: monospace; font-size: 10px; border: 1px solid #555; border-right: none; }
+.data-path-arrow { padding: 1px 4px; font-size: 10px; border: 1px solid #555; background: #d4d0c8; cursor: pointer; }
+.data-path-arrow:hover { background: #ece9d8; }
+.data-path-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; max-height: 120px; overflow-y: auto; background: #fff; border: 1px solid #555; list-style: none; margin: 0; padding: 0; font-size: 10px; font-family: monospace; }
+.data-path-dropdown li { padding: 2px 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.data-path-dropdown li:hover { background: #0a246a; color: #fff; }
 .data-divider { font-weight: 700; }
 .data-total { padding: 1px 4px; background: #fff; border: 1px solid #555; min-width: 24px; text-align: center; }
 .data-batch { padding: 1px 4px; font-size: 10px; color: #333; }
@@ -319,17 +532,28 @@ fieldset legend {
 .param-noise-row select { padding: 0; font-size: 10px; flex: 1 1 auto; min-width: 0; }
 .param-num-xs { width: 28px; padding: 1px; font-size: 10px; text-align: right; }
 .param-num-sm { width: 34px; padding: 1px; font-size: 10px; text-align: right; }
+.param-gradient-row,
 .param-binary-row,
 .param-step-row {
   display: flex; align-items: center; gap: 3px;
   font-size: 10px;
 }
+.param-gradient-row select,
+.param-binary-row select,
+.param-noise-row select { padding: 0; font-size: 10px; flex: 1 1 auto; min-width: 0; }
+.param-gradient-row input[type="range"],
 .param-binary-row input[type="range"],
 .param-step-row input[type="range"] {
   flex: 1 1 auto; min-width: 0; height: 16px; padding: 0; margin: 0;
 }
+.param-gradient-row span,
 .param-binary-row span,
 .param-step-row span { white-space: nowrap; }
+.param-value-box {
+  display: inline-block; width: 30px; text-align: right;
+  padding: 1px 3px; border: 1px inset #ccc; background: #f0f0f0;
+  font-family: monospace; font-size: 10px;
+}
 .param-step-row button { padding: 1px 6px; font-size: 10px; white-space: nowrap; }
 .param-restore-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -360,6 +584,25 @@ fieldset legend {
   background: #fff; padding: 3px 4px; min-width: 28px; text-align: right; line-height: 1.4;
   border: 1px solid #999;
 }
+.val-empty {
+  font-size: 11px; color: #a00; padding: 6px 4px; line-height: 1.4;
+}
+/* VTB 面板（6 Mode × 8 Process × command 树） */
+.vtb-proc-row { display: flex; flex-wrap: wrap; gap: 2px; margin: 2px 0; }
+.vtb-proc {
+  font-size: 10px; padding: 1px 5px; border: 1px solid #999; background: #eee; cursor: pointer;
+}
+.vtb-proc.active { background: #0a0; color: #fff; border-color: #060; }
+.vtb-cmd-table { max-height: 150px; overflow: auto; border: 1px solid #bbb; font-size: 10px; }
+.vtb-cmd-head, .vtb-cmd-row { display: flex; gap: 4px; padding: 1px 3px; }
+.vtb-cmd-head { background: #ddd; font-weight: bold; position: sticky; top: 0; }
+.vtb-cmd-row:nth-child(even) { background: #f6f6f6; }
+.vtb-cmd-row span:nth-child(1) { width: 64px; }
+.vtb-cmd-row span:nth-child(2) { width: 28px; text-align: right; }
+.vtb-cmd-row span:nth-child(3) { flex: 1; }
+.vtb-cmd-row span:nth-child(4) { width: 36px; text-align: right; }
+.vtb-cmd-empty { font-size: 10px; color: #888; padding: 4px; }
+.vtb-note { font-size: 10px; color: #666; padding: 2px; }
 /* 旧版兼容样式（保留以免其它引用） */
 .val-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
@@ -411,6 +654,7 @@ fieldset legend {
 }
 .make-graph-row label { display: inline-flex; align-items: center; gap: 2px; }
 .make-graph-row .btn { height: 18px; font-size: 10px; padding: 0 5px; }
+.make-graph-row .mg-fn-select { height: 18px; font-size: 10px; max-width: 76px; }
 
 /* === Statistics Row (在 .rc-statistics 容器内正常流) === */
 .statistics-row {
@@ -495,11 +739,22 @@ fieldset legend {
 .rd-summary { display: flex; gap: 10px; padding: 2px 0; }
 .rd-ok { color: #080; font-weight: 700; }
 .rd-ng { color: #c00; font-weight: 700; }
+.rd-count-help {
+  font-size: 9px; color: #555; padding: 1px 2px;
+  background: #f9f9f5; border-bottom: 1px solid #ccc;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .rd-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 10px; }
 .rd-table th, .rd-table td { border: 1px solid #aaa; padding: 1px 4px; text-align: center; }
 .rd-table th { background: #ece9d8; }
 .rd-pass td { color: #080; }
 .rd-fail td { color: #c00; background: #fee; }
+.rd-col-detail { width: 36px; }
+.rd-col-name { text-align: left; min-width: 60px; }
+.rd-col-th { width: 44px; }
+.rd-col-val { width: 50px; }
+.rd-col-judge { width: 34px; }
+.rd-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 .rd-buttons { display: flex; gap: 4px; margin-top: 3px; }
 
 /* MousePoint Show(V) 按压按钮态 */
@@ -604,6 +859,9 @@ fieldset legend {
 .btn-fkey:hover { background: #ece9d8; }
 .btn-fkey:active { background: #0a246a; color: #fff; }
 .op-row5 { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.op-row-table { margin: 1px 0; }
+.op-row-table label { gap: 4px; font-weight: 600; }
+.op-table-select { min-width: 160px; padding: 1px 2px; font-size: 10px; border: 1px solid #555; background: #fff; }
 .btn-start {
   padding: 2px 8px; font-size: 11px; font-weight: 700;
   background: #0a246a; color: #fff; border: 1px solid #003; cursor: pointer;
@@ -698,3 +956,75 @@ input, select, textarea {
 .atb-list { margin-bottom: 3px; }
 .atb-listbox { width: 100%; font-size: 10px; }
 .atb-row3 { display: flex; flex-wrap: wrap; gap: 3px; }
+
+/* === Graph View Overlay（Switch View 后的全幅覆盖层） === */
+.graph-view-overlay {
+  position: absolute;
+  left: 0;
+  top: 88px;
+  width: 1800px;
+  height: 912px;
+  background: #ece9d8;
+  border-top: 2px solid #999;
+  z-index: 30;
+  display: flex;
+  box-sizing: border-box;
+}
+.gvo-left {
+  width: 900px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  box-sizing: border-box;
+  border-right: 2px solid #aaa;
+}
+.gvo-left .graph-plot { height: 100%; }
+.gvo-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 8px 16px 8px 8px;
+  box-sizing: border-box;
+}
+.gvo-title {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  padding: 1px 6px;
+  background: #d4d0c8;
+  border: 1px solid #555;
+}
+.gvo-list {
+  width: 220px;
+  flex: 1;
+  min-height: 0;
+  font-family: monospace;
+  font-size: 10px;
+  background: #fff;
+  border: 1px solid #555;
+}
+.gvo-list option { padding: 0 2px; }
+.gvo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  width: 220px;
+}
+.gvo-view-all {
+  font-weight: 700;
+  background: #d4d0c8;
+  border: 1px solid #555;
+  padding: 2px 6px;
+}
+.gvo-view-all:disabled { color: #888; background: #e0e0e0; cursor: not-allowed; }
+.gvo-hint {
+  width: 220px;
+  margin-top: 6px;
+  font-size: 9px;
+  color: #622;
+  background: #fff8dc;
+  border: 1px solid #d8c060;
+  padding: 2px 4px;
+}

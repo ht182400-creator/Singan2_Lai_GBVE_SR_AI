@@ -6,6 +6,7 @@ import React, { useState } from 'react';
  *  行 2: ☑Check note | Reason | Function processing | Other mode （4 个 checkbox）
  *  行 3: IR-Vi | Normal Id | Manual Lw | Thickness | Standard | End Processing | reserved  （7 按钮）
  *  行 4: F1~F8 ＋ Ope. (Start) |  Load VER... （function 选择下拉 + 加载按钮）
+ *  行 0: Table Function 下拉（原版 IDC_COMBO_SET_TABLE_FUNCTION）
  */
 const FUNCS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8'];
 

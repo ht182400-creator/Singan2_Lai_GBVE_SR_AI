@@ -36,6 +36,9 @@ data/2A_DA_111017_115542.dat
 data/UAE/GBVX_GraphData.dat
 data/UAE/GBVX_GraphData_50F.dat
 data/ZAR/2A_DA_111017_115542.dat
+# 运行期上传 / 大体积 .dat 样本（非源码，不上传）
+uploads/
+data/*.dat
 
 # Temp analysis/export file (excluded)
 请仔细阅读*

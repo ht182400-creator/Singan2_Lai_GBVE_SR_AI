@@ -13,13 +13,13 @@
 //   -- P2 图像处理 --
 //   POST /api/imageops              {dat_path,record,wave,ops[]}   -> 处理后图像
 //   -- P3 Graph --
-//   POST /api/graph/make            {dat_path,record,zfile_path,wave,mode}
+//   POST /api/graph/make            {dat_path,start_record,max_records,step,wave,niti_type,grad_type,gain,threshold,color_point,area_*,black,wtable_path}
 //   POST /api/graph/combine         {a[],b[],mode}
 //   POST /api/graph/save|load       {path[,series]}
 //   -- P4 ATB / VTB / 坐标 --
 //   POST /api/zfile/parse           {path,encoding}                -> {areas[]}
-//   POST /api/atb/load              {path}                          [需补移植 CTemplate]
-//   POST /api/vtb/load              {path}                          [需补移植 CTemplateVTB]
+//   POST /api/atb/load              {path}                          [需补移植：ATB 二进制格式需反推]
+//   POST /api/vtb/load              {path}                          -> {modes[6].processes[8].commands[]}
 //   -- P5 保存与配置 --
 //   POST /api/export/csv            {path,header,rows}
 //   POST /api/config/save|load      {path[,config]}
@@ -36,10 +36,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -207,6 +209,33 @@ static std::vector<std::string> json_array_objects(const std::string& arr) {
     return out;
 }
 
+// URL 解码（用于解析上传文件名查询参数），仅覆盖 %XX 与 + 转义
+static std::string url_decode(const std::string& in) {
+  std::string out;
+  out.reserve(in.size());
+  auto hx = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+  };
+  for (size_t i = 0; i < in.size(); ++i) {
+    if (in[i] == '%' && i + 2 < in.size()) {
+      int hi = hx(in[i + 1]), lo = hx(in[i + 2]);
+      if (hi >= 0 && lo >= 0) {
+        out.push_back(static_cast<char>(hi * 16 + lo));
+        i += 2;
+        continue;
+      }
+    } else if (in[i] == '+') {
+      out.push_back(' ');
+      continue;
+    }
+    out.push_back(in[i]);
+  }
+  return out;
+}
+
 // ---- JSON 序列化辅助 ----
 static std::string json_escape(const std::string& s) {
     std::string o;
@@ -369,6 +398,78 @@ static int name_to_tab(const std::string& name) {
     return 0;
 }
 
+// ---- Make Graph 专用：复刻 CreateGraph1 + ComputeSuppleResult ----
+// 对当前 twoimg[tab] 做二值化（阈值作用于 twoimg 截断到 8bit 后的值），复刻 NITIGraph
+static void niti_on_twoimg(ImageEngine& eng, int tab, int threshold) {
+    const auto& two = eng.twoimg_at(tab);
+    std::vector<uint16_t> out(two.size());
+    for (size_t i = 0; i < two.size(); i++) {
+        uint8_t v = static_cast<uint8_t>(two[i]);
+        out[i] = (v >= threshold) ? 0xff : 0;
+    }
+    eng.to_2byte_orver_write(tab, out);
+}
+
+// 在指定矩形区域内统计黑/白像素数（复刻 ComputeSuppleResult case 0：summary pixels）
+static std::pair<int, int> count_black_white(const std::vector<uint16_t>& img,
+                                             int x, int y, int w, int h,
+                                             int color_point) {
+    int black = 0, white = 0;
+    int offset = color_point - 150;
+    int x1 = std::max(0, x);
+    int y1 = std::max(0, y);
+    int x2 = std::min(singan2::X_SIZE, x + w);
+    int y2 = std::min(singan2::Y_SIZE, y + h);
+    for (int i = y1; i < y2; i++) {
+        for (int j = x1; j < x2; j++) {
+            int color = static_cast<int>(img[i * singan2::X_SIZE + j]) + offset;
+            if (color > 255) color = 255;
+            if (color < 0) color = 0;
+            if (color == 0) black++;
+            else if (color == 255) white++;
+        }
+    }
+    return {black, white};
+}
+
+// 单 record 计算 Make Graph 像素数
+static bool make_graph_record(const std::string& dat_path, int record,
+                              const std::string& wtable_path, const std::string& wave_name,
+                              const std::string& niti_type, int grad_type, int gain,
+                              int threshold, int color_point,
+                              int area_x, int area_y, int area_w, int area_h,
+                              bool use_black,
+                              int& out_value, std::string& err) {
+    ImageEngine eng;
+    if (!build_engine(dat_path, record, wtable_path, eng, err)) return false;
+    int tab = name_to_tab(wave_name);
+    // 中间波段 Img7..Img15 需先计算
+    if (tab >= 6 && tab <= 14) {
+        try {
+            eng.compute_intermediate_waves(128, 128);
+        } catch (const std::exception& e) {
+            err = std::string("中间波段计算失败: ") + e.what();
+            return false;
+        }
+    }
+    eng.tab_no = tab;
+    if (niti_type == "Gra+Bin") {
+        eng.gradient(grad_type, gain);
+        niti_on_twoimg(eng, tab, threshold);
+    } else if (niti_type == "Bin") {
+        niti_on_twoimg(eng, tab, threshold);
+    } else if (niti_type == "NiBlack") {
+        eng.niblack(threshold);
+    } else {
+        err = "未知的 niti_type: " + niti_type;
+        return false;
+    }
+    const auto& two = eng.twoimg_at(tab);
+    auto [black, white] = count_black_white(two, area_x, area_y, area_w, area_h, color_point);
+    out_value = use_black ? black : white;
+    return true;
+}
+
 // ---- 分析：运行算法并序列化 ----
 static std::string run_and_serialize(const std::string& dat_path, int record,
                                      const std::string& zfile_path, int kin, int country) {
@@ -415,6 +516,26 @@ static void send_err(httplib::Response& res, int status, const std::string& msg)
 static void send_ok(httplib::Response& res, const std::string& body) {
     set_cors(res);
     res.set_content(body, kJsonType);
+}
+
+// 调试日志：落盘到 CWD 下的 singan2_debug.log，便于开发跟踪（如 Statistics IR2 返回空时定位路径/后端问题）。
+// 带时间戳，文件锁保证多线程安全；任意异常静默忽略，不影响主流程。
+static std::mutex g_dbg_mutex;
+static void debug_log(const std::string& msg) {
+    try {
+        std::lock_guard<std::mutex> lk(g_dbg_mutex);
+        std::ofstream out("singan2_debug.log", std::ios::app);
+        if (!out) return;
+        std::time_t t = std::time(nullptr);
+        char buf[32] = {0};
+        std::tm tm_buf{};
+        localtime_s(&tm_buf, &t);
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_buf);
+        out << "[" << buf << "] " << msg << "\n";
+        out.flush();
+    } catch (...) {
+        // 调试日志失败不影响主流程
+    }
 }
 
 int main(int argc, char** argv) {
@@ -556,11 +677,21 @@ int main(int argc, char** argv) {
         }
         int mn = 0, mx = 0;
         std::string data = encode_u8(seg, mn, mx);
+        singan2::SmallImageValidation v = singan2::extract_small_image_validation(dat_path, record);
         std::string body = "{\"record\":" + std::to_string(record);
         body += ",\"size\":" + std::to_string(seg.size());
         body += ",\"min\":" + std::to_string(mn);
         body += ",\"max\":" + std::to_string(mx);
-        body += ",\"data\":\"" + data + "\"}";
+        body += ",\"data\":\"" + data + "\"";
+        // P4 修正：Validation Result 字段来自小图像段(OLD/MainRun.cpp 第 833-843 行)，非 s2
+        body += ",\"validation\":{\"han\":\"" + json_escape(v.han) + "\",\"kekka\":\"" +
+                json_escape(v.kekka) + "\",\"le\":" + std::to_string(v.le) +
+                ",\"se\":" + std::to_string(v.se) +
+                ",\"ir_adictive\":" + std::to_string(v.ir_adictive) +
+                ",\"g_adictive\":" + std::to_string(v.g_adictive) +
+                ",\"binary_adictive\":" + std::to_string(v.binary_adictive) +
+                ",\"speed\":" + std::to_string(v.speed) + "}";
+        body += "}";
         send_ok(res, body);
     });
 
@@ -595,11 +726,118 @@ int main(int argc, char** argv) {
         int kin = json_get_int(req.body, "kin", 1);
         int country = json_get_int(req.body, "country", 0);
         if (dat_path.empty() || zfile_path.empty()) {
+            debug_log("[analyze-path] 400 dat_path=" + dat_path + " zfile_path=" + zfile_path + " reason=必填项为空");
             send_err(res, 400, "dat_path 与 zfile_path 均必填");
             return;
         }
         try {
             send_ok(res, run_and_serialize(dat_path, record, zfile_path, kin, country));
+        } catch (const std::exception& e) {
+            debug_log("[analyze-path] 异常 dat_path=" + dat_path + " zfile_path=" + zfile_path + " record=" + std::to_string(record) + " err=" + e.what());
+            send_err(res, 500, e.what());
+        }
+    });
+
+    // 批量分析：单文件多 record 一次请求返回，避免前端逐条发数百次 HTTP（Statistics 慢的根因）
+    // 服务端按 start/step 展开取样序号，内部并行计算（每 record 的 ImageEngine/ALL32 均为局部状态，无数据竞争）
+    svr.Post("/api/analyze-batch", [](const httplib::Request& req, httplib::Response& res) {
+        std::string dat_path = json_get_str(req.body, "dat_path", "");
+        std::string zfile_path = json_get_str(req.body, "zfile_path", "");
+        int kin = json_get_int(req.body, "kin", 1);
+        int country = json_get_int(req.body, "country", 0);
+        int start = json_get_int(req.body, "start", 0);
+        int step = json_get_int(req.body, "step", 1);
+        if (step < 1) step = 1;
+        int count = json_get_int(req.body, "count", 1);
+        if (count < 1) count = 1;
+        if (dat_path.empty() || zfile_path.empty()) {
+            debug_log("[analyze-batch] 400 dat_path=" + dat_path + " zfile_path=" + zfile_path + " reason=必填项为空");
+            send_err(res, 400, "dat_path 与 zfile_path 均必填");
+            return;
+        }
+        try {
+            auto blocks = singan2::parse_blocks(dat_path);
+            int side_count = 0;
+            for (const auto& b : blocks) if (std::get<1>(b) == 5) side_count++;  // MM1_Side
+            int record_count = side_count / singan2::WAVE_COUNT;
+            // 一次返回该文件在 start/step 下全部取样记录（对齐 MFC 一次性全量返回），
+            // 仅受本文件 record 数约束；服务端多线程并行计算，避免逐条请求。
+            int startVal = std::max(0, std::min(record_count - 1, start));
+            int available = std::max(1, (int)(std::max(0, record_count - 1 - startVal) / step) + 1);
+            int n = std::min(count, available);
+            std::vector<std::vector<int>> s2s(n), etcs(n);
+            std::vector<std::string> errs(n);
+
+            int nthreads = (int)std::thread::hardware_concurrency();
+            if (nthreads < 1) nthreads = 1;
+            if (nthreads > n) nthreads = n;
+            auto worker = [&](int lo, int hi) {
+                for (int i = lo; i < hi; i++) {
+                    int rec = std::max(0, std::min(record_count - 1, startVal + i * step));
+                    try {
+                        singan2::run_algorithm(dat_path, rec, zfile_path, "" /*wtable 空=理论表*/,
+                                              kin, country, s2s[i], etcs[i]);
+                    } catch (const std::exception& e) {
+                        errs[i] = e.what();
+                    }
+                }
+            };
+            if (nthreads <= 1) {
+                worker(0, n);
+            } else {
+                std::vector<std::thread> pool;
+                int chunk = (n + nthreads - 1) / nthreads;
+                for (int t = 0; t < nthreads; t++) {
+                    int lo = t * chunk, hi = std::min(lo + chunk, n);
+                    if (lo >= hi) break;
+                    pool.emplace_back(worker, lo, hi);
+                }
+                for (auto& th : pool) th.join();
+            }
+
+            // 调试日志：记录单次批量分析的「请求/返回/有效/跳过」数量，便于定位 IR2 空白等问题
+            {
+                int valid = 0, skip = 0;
+                std::vector<std::string> err_samples;
+                for (const auto& e : errs) {
+                    if (e.empty()) valid++;
+                    else { skip++; if (err_samples.size() < 3) err_samples.push_back(e); }
+                }
+                std::string dbg = "[analyze-batch] 请求 dat_path=" + dat_path
+                                + " zfile_path=" + zfile_path
+                                + " start=" + std::to_string(start)
+                                + " step=" + std::to_string(step)
+                                + " count(请求)=" + std::to_string(count)
+                                + " | record_count=" + std::to_string(record_count)
+                                + " available=" + std::to_string(available)
+                                + " 返回 n=" + std::to_string(n)
+                                + " 有效=" + std::to_string(valid)
+                                + " 跳过=" + std::to_string(skip);
+                if (!err_samples.empty()) {
+                    dbg += " 样例错误=";
+                    for (size_t i = 0; i < err_samples.size(); ++i) {
+                        if (i) dbg += " | ";
+                        dbg += err_samples[i];
+                    }
+                }
+                debug_log(dbg);
+            }
+
+            std::string body = "{\"count\":" + std::to_string(n)
+                             + ",\"record_count\":" + std::to_string(record_count) + ",\"results\":[";
+            for (int i = 0; i < n; i++) {
+                if (i) body += ",";
+                int rec = std::max(0, std::min(record_count - 1, startVal + i * step));
+                if (!errs[i].empty()) {
+                    body += "{\"record\":" + std::to_string(rec) + ",\"error\":" + json_escape(errs[i]) + "}";
+                } else {
+                    body += "{\"record\":" + std::to_string(rec)
+                         + ",\"s2\":" + to_json_array(s2s[i])
+                         + ",\"etc\":" + to_json_array(etcs[i]) + "}";
+                }
+            }
+            body += "]}";
+            send_ok(res, body);
         } catch (const std::exception& e) {
             send_err(res, 500, e.what());
         }
@@ -635,6 +873,70 @@ int main(int argc, char** argv) {
         }
     });
 
+    // ============ P0b 文件上传（拖拽 / 文件选择）============
+    // 复刻 OLD DropDlg 的“拖入 .dat 即加载”：把上传文件落到服务器侧 uploads/ 目录，
+    // 保留不删除，返回路径供 /api/session/open 后续打开（与 /api/analyze 不同，后者用完即删）。
+    // 流式上传：不再把整个请求体缓冲进内存，支持数十~数百 MB 的大 .dat 文件。
+    // 前端以二进制 body 直接 POST（Content-Type: application/octet-stream），
+    // 文件名通过查询参数 name（URL 编码）或请求头 X-File-Name 传递。
+    // 同时兼容老的 multipart/form-data（dat/file 字段）上传方式。
+    svr.Post("/api/upload",
+             [](const httplib::Request& req, httplib::Response& res,
+                const httplib::ContentReader& content_reader) {
+                 // 解析目标文件名（去掉客户端路径，防止目录穿越）
+                 std::string raw = req.get_param_value("name");
+                 if (raw.empty()) raw = req.get_header_value("X-File-Name");
+                 std::string name = raw.empty() ? "upload.dat" : url_decode(raw);
+                 std::string base = name.substr(name.find_last_of("/\\") + 1);
+                 if (base.empty()) base = "upload.dat";
+
+                 std::error_code ec;
+                 fs::path dir = fs::current_path() / "uploads";
+                 fs::create_directories(dir, ec);
+                 fs::path outp = dir / ("singan2_" + std::to_string(std::time(nullptr)) +
+                                        "_" + std::to_string(std::rand()) + "_" + base);
+
+                 std::ofstream out(outp, std::ios::binary);
+                 if (!out) {
+                     send_err(res, 500, "无法创建上传文件: " + outp.string());
+                     return;
+                 }
+
+                 bool ok = false;
+                 if (req.is_multipart_form_data()) {
+                     ok = content_reader(
+                         [&](const httplib::FormData& fd) {
+                             if (!fd.filename.empty()) {
+                                 std::string b =
+                                     fd.filename.substr(fd.filename.find_last_of("/\\") + 1);
+                                 if (!b.empty()) base = b;
+                             }
+                             return true;
+                         },
+                         [&](const char* data, size_t len) {
+                             if (len > 0)
+                                 out.write(data, static_cast<std::streamsize>(len));
+                             return true;
+                         });
+                 } else {
+                     ok = content_reader([&](const char* data, size_t len) {
+                         if (len > 0) out.write(data, static_cast<std::streamsize>(len));
+                         return true;
+                     });
+                 }
+                 out.close();
+
+                 if (!ok) {
+                     send_err(res, 500, "上传写入中断或被客户端取消");
+                     fs::remove(outp, ec);
+                     return;
+                 }
+
+                 std::string body = "{\"ok\":true,\"path\":\"" + json_escape(outp.string()) +
+                                    "\",\"name\":\"" + json_escape(base) + "\"}";
+                 send_ok(res, body);
+             });
+
     // ============ P2 图像处理 ============
     svr.Post("/api/imageops", [](const httplib::Request& req, httplib::Response& res) {
         std::string dat_path = json_get_str(req.body, "dat_path", "");
@@ -660,14 +962,33 @@ int main(int argc, char** argv) {
             std::string op = json_get_str(opobj, "op", "");
             try {
                 if (op == "gradient") {
-                    eng.gradient(json_get_int(opobj, "gtype", 0), json_get_int(opobj, "amp", 1));
-                    applied.push_back("gradient");
+                    int gtype = json_get_int(opobj, "gtype", 0);
+                    int amp = json_get_int(opobj, "amp", 1);
+                    if (gtype == 3) {
+                        eng.laplacian(amp);
+                        applied.push_back("laplacian");
+                    } else if (gtype == 4) {
+                        eng.prewitt(amp);
+                        applied.push_back("prewitt");
+                    } else {
+                        eng.gradient(gtype, amp);
+                        applied.push_back("gradient");
+                    }
                 } else if (op == "niti") {
                     eng.niti(json_get_int(opobj, "s", 128));
                     applied.push_back("niti");
+                } else if (op == "niblack") {
+                    eng.niblack(json_get_int(opobj, "s", 15));
+                    applied.push_back("niblack");
                 } else if (op == "smooth") {
                     eng.smooth();
                     applied.push_back("smooth");
+                } else if (op == "median") {
+                    eng.median();
+                    applied.push_back("median");
+                } else if (op == "color") {
+                    eng.color(json_get_int(opobj, "offset", 0));
+                    applied.push_back("color");
                 } else if (op == "intermediate") {
                     eng.compute_intermediate_waves(json_get_int(opobj, "red_offset", 128),
                                                    json_get_int(opobj, "grn_offset", 128));
@@ -707,114 +1028,113 @@ int main(int argc, char** argv) {
     });
 
     // ============ P3 Graph ============
-    // [需补移植] 原版 CreateGraph.cpp / OnDrawPaint.cpp / CGR_CLASS 未移植，
-    // 此处以"按坐标区域统计 + 列剖面"生成可用序列，语义对齐待补移植后校准。
+    // 复刻 OLD Ren.cpp S2_gr + OnDrawGraph.cpp CGR_CLASS：
+    // 批量分析多个 record，每个 record 返回 S2[1..32]+etc[1..12]（共 44 列）。
+    // 前端用函数列号（global_select_no）取某一列画"函数值×record序号"曲线，并输出 txt 列表。
     svr.Post("/api/graph/make", [](const httplib::Request& req, httplib::Response& res) {
         std::string dat_path = json_get_str(req.body, "dat_path", "");
         if (dat_path.empty()) {
             send_err(res, 400, "dat_path 必填");
             return;
         }
-        int record = json_get_int(req.body, "record", 0);
         std::string zfile_path = json_get_str(req.body, "zfile_path", "");
+        int kin = json_get_int(req.body, "kin", 1);
+        int country = json_get_int(req.body, "country", 0);
+        int max_records = json_get_int(req.body, "max_records", 16);
+        if (max_records < 1) max_records = 1;
+        if (max_records > 8192) max_records = 8192;
+        int start_record = json_get_int(req.body, "start_record", 0);
+        if (start_record < 0) start_record = 0;
+        int step = json_get_int(req.body, "step", 1);
+        if (step < 1) step = 1;
+
+        std::error_code ec;
+        if (!fs::exists(dat_path, ec)) {
+            send_err(res, 404, "数据文件不存在: " + dat_path);
+            return;
+        }
+        auto blocks = singan2::parse_blocks(dat_path);
+        int side_count = 0;
+        for (const auto& b : blocks) {
+            if (std::get<1>(b) == 5) side_count++;  // MM1_Side
+        }
+        int record_count = side_count / singan2::WAVE_COUNT;
+        if (start_record >= record_count) start_record = 0;
+
+        // Make Graph 真实语义：CreateGraph1 + ComputeSuppleResult，返回每 record 的像素数
         std::string wtable_path = json_get_str(req.body, "wtable_path", "");
-        std::string name = resolve_wave_name(req.body, "wave", 0);
+        std::string wave_name = resolve_wave_name(req.body, "wave", 0);
+        std::string niti_type = json_get_str(req.body, "niti_type", "Gra+Bin");
+        int grad_type = json_get_int(req.body, "grad_type", 0);
+        int gain = json_get_int(req.body, "gain", 1);
+        int threshold = json_get_int(req.body, "threshold", 90);
+        int color_point = json_get_int(req.body, "color_point", 150);
+        int area_x = json_get_int(req.body, "area_x", 0);
+        int area_y = json_get_int(req.body, "area_y", 0);
+        int area_w = json_get_int(req.body, "area_w", 20);
+        int area_h = json_get_int(req.body, "area_h", 20);
+        bool use_black = json_get_bool(req.body, "black", true);
 
-        ImageEngine eng;
-        std::string err;
-        if (!build_engine(dat_path, record, wtable_path, eng, err)) {
-            send_err(res, 400, err);
-            return;
+        // 先按 start/step/max_records 展开本次要处理的 record 序号（越界即止）
+        std::vector<int> recs;
+        recs.reserve(max_records);
+        for (int r = 0; r < max_records; r++) {
+            int rec = start_record + r * step;
+            if (rec >= record_count) break;
+            recs.push_back(rec);
         }
-        const std::vector<uint8_t>* img = eng.oneimg_find(name);
-        if (!img) {
-            send_err(res, 400, "波段不存在: " + name);
-            return;
-        }
+        int m = (int)recs.size();
+        std::vector<int>  values(m, 0);
+        std::vector<char> ok(m, 0);
 
-        // 区域：优先用坐标文件，否则整幅
-        std::vector<singan2::Area> areas;
-        if (!zfile_path.empty()) {
-            try {
-                areas = singan2::parse_zfile(zfile_path,
-                                             json_get_str(req.body, "encoding", "shift_jis"));
-            } catch (...) {
-                areas.clear();
-            }
-        }
-        if (areas.empty()) {
-            singan2::Area whole;
-            whole.x1 = 0; whole.y1 = 0; whole.x2 = singan2::X_SIZE - 1; whole.y2 = singan2::Y_SIZE - 1;
-            areas.push_back(whole);
-        }
-        // 坐标文件可能含上千区域，默认只取前 N 个，避免响应过大
-        int max_areas = json_get_int(req.body, "max_areas", 8);
-        if (max_areas < 1) max_areas = 1;
-        if (max_areas > 256) max_areas = 256;
-
-        const int W = singan2::X_SIZE, H = singan2::Y_SIZE;
-        std::string series_json = "[";
-        std::string stats_json = "[";
-        bool first_series = true, first_stat = true;
-        int ai = 0;
-        for (const auto& a : areas) {
-            if (ai >= max_areas) break;
-            int x1 = std::max(0, std::min(a.x1, W - 1)), x2 = std::max(0, std::min(a.x2, W - 1));
-            int y1 = std::max(0, std::min(a.y1, H - 1)), y2 = std::max(0, std::min(a.y2, H - 1));
-            if (x2 < x1) std::swap(x1, x2);
-            if (y2 < y1) std::swap(y1, y2);
-
-            // 列剖面：每列均值
-            std::vector<double> prof;
-            prof.reserve(x2 - x1 + 1);
-            double sum = 0, sum2 = 0;
-            int cnt = 0, mnv = 255, mxv = 0;
-            for (int x = x1; x <= x2; x++) {
-                double col = 0;
-                for (int y = y1; y <= y2; y++) {
-                    int v = (*img)[y * W + x];
-                    col += v;
-                    sum += v; sum2 += static_cast<double>(v) * v;
-                    cnt++;
-                    if (v < mnv) mnv = v;
-                    if (v > mxv) mxv = v;
+        // 并行化：每个 record 的计算相互独立（make_graph_record 内部持有局部 ImageEngine，
+        // 文件读取走带锁的 LRU 缓存），各线程只写自己的下标，无数据竞争。
+        int nthreads = (int)std::thread::hardware_concurrency();
+        if (nthreads < 1) nthreads = 1;
+        if (nthreads > m) nthreads = m;
+        auto worker = [&](int lo, int hi) {
+            for (int i = lo; i < hi; i++) {
+                std::string err;
+                int v = 0;
+                if (make_graph_record(dat_path, recs[i], wtable_path, wave_name, niti_type,
+                                      grad_type, gain, threshold, color_point,
+                                      area_x, area_y, area_w, area_h, use_black, v, err)) {
+                    values[i] = v; ok[i] = 1;
                 }
-                prof.push_back(col / static_cast<double>(y2 - y1 + 1));
             }
-            double avg = cnt ? sum / cnt : 0;
-            double var = cnt ? (sum2 / cnt - avg * avg) : 0;
-            if (var < 0) var = 0;
-
-            if (!first_series) series_json += ",";
-            first_series = false;
-            series_json += "{\"name\":\"Area" + std::to_string(ai) +
-                           "\",\"points\":" + to_json_array(prof, 3) + "}";
-
-            char buf[64];
-            if (!first_stat) stats_json += ",";
-            first_stat = false;
-            stats_json += "{\"index\":" + std::to_string(ai);
-            stats_json += ",\"area\":{\"x1\":" + std::to_string(a.x1) +
-                          ",\"y1\":" + std::to_string(a.y1) +
-                          ",\"x2\":" + std::to_string(a.x2) +
-                          ",\"y2\":" + std::to_string(a.y2) + "}";
-            std::snprintf(buf, sizeof(buf), "%.4f", avg);
-            stats_json += std::string(",\"avg\":") + buf;
-            std::snprintf(buf, sizeof(buf), "%.4f", std::sqrt(var));
-            stats_json += std::string(",\"std\":") + buf;
-            stats_json += ",\"min\":" + std::to_string(mnv);
-            stats_json += ",\"max\":" + std::to_string(mxv);
-            stats_json += "}";
-            ai++;
+        };
+        if (nthreads <= 1) {
+            worker(0, m);
+        } else {
+            std::vector<std::thread> pool;
+            int chunk = (m + nthreads - 1) / nthreads;
+            for (int t = 0; t < nthreads; t++) {
+                int lo = t * chunk;
+                int hi = std::min(lo + chunk, m);
+                if (lo >= hi) break;
+                pool.emplace_back(worker, lo, hi);
+            }
+            for (auto& th : pool) th.join();
         }
-        series_json += "]";
-        stats_json += "]";
 
-        std::string body = "{\"record\":" + std::to_string(record);
-        body += ",\"wave\":\"" + json_escape(name) + "\"";
-        body += ",\"note\":\"[需补移植] 原版 CreateGraph/OnDrawPaint 未移植，当前为按区域列剖面近似\"";
-        body += ",\"series\":" + series_json;
-        body += ",\"stats\":" + stats_json;
+        // 组装 rows（失败记录跳过，record 号保持原值，与旧逻辑一致）
+        std::string rows_json = "[";
+        bool first = true;
+        for (int i = 0; i < m; i++) {
+            if (!ok[i]) continue;
+            if (!first) rows_json += ",";
+            first = false;
+            rows_json += "{\"record\":" + std::to_string(recs[i]);
+            rows_json += ",\"value\":" + std::to_string(values[i]) + "}";
+        }
+        rows_json += "]";
+
+        std::string body = "{\"record_count\":" + std::to_string(record_count);
+        body += ",\"note\":\"[复刻 OLD CreateGraph1/ComputeSuppleResult] 跨 record 像素统计：每行 = 一个 record 在选区内的黑/白像素数\"";
+        body += ",\"wave\":\"" + json_escape(wave_name) + "\"";
+        body += ",\"threshold\":" + std::to_string(threshold);
+        body += ",\"black\":" + std::string(use_black ? "true" : "false");
+        body += ",\"rows\":" + rows_json;
         body += "}";
         send_ok(res, body);
     });
@@ -923,17 +1243,119 @@ int main(int argc, char** argv) {
         }
     });
 
-    // [需补移植] ATB / VTB 依赖 CTemplate* / CTemplateVTB，尚未移植
+    // ============ P4 VTB 模板解析（移植自 OLD/CTemplateVTB.cpp CTemplateVTB::Load）============
+    // 二进制布局（小端）：header(8×u32) + mode(5×8 u32) + route(208 u32) + command 流(u16)。
+    // command 流按 mode(6) -> process(8) -> command 分组：
+    //   每个 command = {function(u16), len(u16), params[len](u16), sum(u16)}；
+    //   function==0xffff 表示该 process 结束，切换到下一 process（process 满 8 进下一 mode）。
+    struct VtbCmd { uint16_t function; uint16_t len; std::vector<uint16_t> params; uint16_t sum; };
+    struct VtbProc { int count = 0; std::vector<VtbCmd> commands; };
+    struct VtbMode { VtbProc process[8]; };
+
+    const auto parse_vtb_to_json = [](const std::string& path) -> std::string {
+        std::ifstream fp(path, std::ios::binary);
+        if (!fp) return std::string("{\"path\":\"") + json_escape(path) + "\",\"error\":\"无法打开文件\"}";
+        std::vector<uint8_t> buf((std::istreambuf_iterator<char>(fp)), std::istreambuf_iterator<char>());
+        fp.close();
+        // header + mode + route 共 32 + 160 + 832 = 1024 字节
+        const size_t kHeaderModeRoute = 32 + 160 + 832;
+        if (buf.size() < kHeaderModeRoute + 2) {
+            return std::string("{\"path\":\"") + json_escape(path) + "\",\"error\":\"文件过小\"}";
+        }
+        bool sru = (buf.size() > 3 && buf[0] == 'S' && buf[1] == 'R' && buf[2] == 'U');
+        size_t pos = sru ? 32 : 0;          // SRU 文件头部有 32 字节 sruHeader
+        pos += kHeaderModeRoute;
+
+        // command 流：剩余字节按 u16 小端读入
+        std::vector<uint16_t> vtbData;
+        vtbData.reserve((buf.size() - pos) / 2);
+        for (size_t i = pos; i + 1 < buf.size(); i += 2) {
+            vtbData.push_back(static_cast<uint16_t>(buf[i] | (buf[i + 1] << 8)));
+        }
+
+        std::vector<VtbMode> vtb(6);
+        size_t idx = 0;
+        int indexMode = 0, indexProcess = 0, indexCommand = 0;
+        bool sectionEnd = false;
+        while (idx < vtbData.size() && indexMode < 6) {
+            uint16_t function = vtbData[idx];
+            if (function == 0xffff) {
+                sectionEnd = true;
+            } else {
+                VtbCmd c;
+                c.function = function;
+                idx++;
+                if (idx >= vtbData.size()) break;
+                c.len = vtbData[idx];
+                for (int p = 0; p < c.len && idx < vtbData.size(); p++) {
+                    idx++;
+                    if (idx >= vtbData.size()) break;
+                    c.params.push_back(vtbData[idx]);
+                }
+                idx++;
+                if (idx < vtbData.size()) c.sum = vtbData[idx];
+                vtb[indexMode].process[indexProcess].commands.push_back(c);
+                indexCommand++;
+            }
+            if (sectionEnd) {
+                vtb[indexMode].process[indexProcess].count = indexCommand + 1;
+                indexCommand = 0;
+                indexProcess++;
+                if (indexProcess >= 8) {
+                    indexProcess = 0;
+                    indexMode++;
+                }
+                sectionEnd = false;
+            }
+            idx++;
+        }
+
+        std::string body = "{\"path\":\"" + json_escape(path) + "\",\"sru\":" +
+                            (sru ? "true" : "false") + ",\"modes\":[";
+        for (int m = 0; m < 6; m++) {
+            if (m) body += ",";
+            body += "{\"index\":" + std::to_string(m) + ",\"processes\":[";
+            for (int pr = 0; pr < 8; pr++) {
+                if (pr) body += ",";
+                const VtbProc& proc = vtb[m].process[pr];
+                body += "{\"index\":" + std::to_string(pr) + ",\"count\":" +
+                        std::to_string(proc.count) + ",\"commands\":[";
+                for (size_t ci = 0; ci < proc.commands.size(); ci++) {
+                    if (ci) body += ",";
+                    const VtbCmd& cmd = proc.commands[ci];
+                    body += "{\"function\":" + std::to_string(cmd.function) +
+                            ",\"len\":" + std::to_string(cmd.len) + ",\"params\":[";
+                    for (size_t pi = 0; pi < cmd.params.size(); pi++) {
+                        if (pi) body += ",";
+                        body += std::to_string(cmd.params[pi]);
+                    }
+                    body += "],\"sum\":" + std::to_string(cmd.sum) + "}";
+                }
+                body += "]}";
+            }
+            body += "]}";
+        }
+        body += "],\"note\":\"VTB 已解析(" + std::to_string(vtbData.size()) + " u16)\"}";
+        return body;
+    };
+
     svr.Post("/api/atb/load", [](const httplib::Request& req, httplib::Response& res) {
         std::string path = json_get_str(req.body, "path", "");
         send_ok(res, std::string("{\"path\":\"") + json_escape(path) +
-                         "\",\"items\":[],\"note\":\"[需补移植] ATB 依赖 CTemplate*/ATB 逻辑，尚未移植\"}");
+                         "\",\"items\":[],\"note\":\"[需补移植] ATB 二进制格式(OLD 未提供 CTemplateATB，需由 X_ATB_*.txt 对照 X_ATB_*.bin 反推)\"}");
     });
 
-    svr.Post("/api/vtb/load", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Post("/api/vtb/load", [&parse_vtb_to_json](const httplib::Request& req, httplib::Response& res) {
         std::string path = json_get_str(req.body, "path", "");
-        send_ok(res, std::string("{\"path\":\"") + json_escape(path) +
-                         "\",\"items\":[],\"note\":\"[需补移植] VTB 依赖 CTemplateVTB，尚未移植\"}");
+        if (path.empty()) {
+            send_err(res, 400, "path 必填");
+            return;
+        }
+        try {
+            send_ok(res, parse_vtb_to_json(path));
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
     });
 
     // ============ P5 保存与配置 ============
@@ -1030,6 +1452,20 @@ int main(int argc, char** argv) {
         send_ok(res, std::string("{\"path\":\"") + json_escape(path) + "\",\"config\":" +
                          (ss.str().empty() ? std::string("{}") : ss.str()) + "}");
     });
+
+    // 本地单机构建工具：上传的 .dat 可达数百 MB，放宽 httplib 默认 100MB 上传上限到 4GB
+    svr.set_payload_max_length(4UL * 1024 * 1024 * 1024);
+
+    // 并发模型：httplib 默认即为多线程（线程池 base=max(8, 硬件线程数-1)、max=4×base），
+    // 这里显式声明以保持意图清晰，并集中在一处便于按需调大并发上限。
+    // 效果：上传大文件（655MB 约 6.5s）期间，取图 / Make Graph 等其它请求可在其它线程并行处理，不被阻塞。
+    // 线程安全前提：WTable 缓存已由 std::mutex 保护（见 get_wtable），ImageEngine 每次请求本地构造，无共享可变状态。
+    svr.new_task_queue = [] {
+        const size_t base = (std::max)(8u, std::thread::hardware_concurrency() > 0
+                                              ? std::thread::hardware_concurrency() - 1
+                                              : 0);
+        return new httplib::ThreadPool(base, base * 4);
+    };
 
     std::cout << "[server] SINGAN2 HTTP API listening on port " << port << " ..." << std::endl;
     if (!svr.listen("0.0.0.0", port)) {

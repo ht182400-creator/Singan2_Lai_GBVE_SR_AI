@@ -31,9 +31,14 @@ public:
     void to_2byte_orver_write(int tab, const std::vector<uint16_t>& img2byte);
 
     // 算子
-    void gradient(int gtype, int amp);
+    void gradient(int gtype, int amp);               // 0=Sobel,1=Roberts,2=Normal
+    void laplacian(int amp);
+    void prewitt(int amp);
     void niti(int s);
+    void niblack(int s);
     void smooth();
+    void median();
+    void color(int offset);                          // 亮度偏移（对应 OLD step movement / global_color_point）
 
     // DSP 平方根（静态）
     static int rute(int u_bunsan, int left, int right, const WTable& wt);
