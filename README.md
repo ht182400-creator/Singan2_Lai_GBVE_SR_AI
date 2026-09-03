@@ -109,7 +109,7 @@ python server/smoke_test.py
 cd web
 npm install
 npm run dev          # Vite 开发服务器 @ :5173（已配 /api -> :8080 代理）
-npm test             # Vitest：38 文件 / 198 用例（181 通过；App.test 与 debugLogger 共 17 例为既有 jsdom canvas 失败）
+npm test             # Vitest 全量测试（38 文件 / 198 用例，全部通过）
 ```
 
 ### Web 布局约束（重要）
@@ -144,7 +144,7 @@ cd poc && python run_poc.py --dat ../data/2A_DA_111017_115542.dat \
 前端回归（Vitest）：
 
 ```bash
-cd web && npm test        # 38 文件 / 198 用例（181 通过；17 例为既有 jsdom canvas 失败）
+cd web && npm test        # ✅ 38 文件 / 198 用例全部通过
 ```
 
 ## 编码约定

@@ -104,7 +104,7 @@ export default function App() {
   const [logViewer, setLogViewer] = useState(null);
   const [logLines, setLogLines] = useState([]);
   const [logLoading, setLogLoading] = useState(false);
-  const [logError, setLogError] = useState('');
+  const [logViewError, setLogViewError] = useState(''); // 日志查看器错误文案（勿命名为 logError，会遮蔽 debugLogger 的 logError 函数）
   const [channel, setChannel] = useState(0);
   const [subActive, setSubActive] = useState('IR1');
   const [history, setHistory] = useState(['Ready']);
@@ -806,17 +806,16 @@ export default function App() {
     pushHistory(kind === 'ui' ? 'Review UI Log' : 'Review Backend Log');
     if (kind === 'ui') {
       try {
-        const entries = getLog();
-        setLogLines(entries.map((e) => ({
+        const entries = getLog();        setLogLines(entries.map((e) => ({
           time: e.time,
           level: e.level || 'LOG',
           module: e.module || 'MISC',
           msg: e.data ? `${e.msg} ${e.data}` : e.msg,
         })));
-        setLogError('');
+        setLogViewError('');
       } catch (ex) {
         setLogLines([]);
-        setLogError('读取 UI 日志失败: ' + (ex && ex.message ? ex.message : String(ex)));
+        setLogViewError('读取 UI 日志失败: ' + (ex && ex.message ? ex.message : String(ex)));
       }
       setLogLoading(false);
       setLogViewer(kind);
@@ -825,18 +824,18 @@ export default function App() {
     // 后端日志：异步拉取
     setLogViewer(kind);
     setLogLoading(true);
-    setLogError('');
+    setLogViewError('');
     try {
       const data = await getBackendLog();
       if (!data || !data.exists) {
         setLogLines([]);
-        setLogError('后端日志文件不存在（singan2_debug.log）');
+        setLogViewError('后端日志文件不存在（singan2_debug.log）');
       } else {
         setLogLines(parseBackendLog(data.content));
       }
     } catch (ex) {
       setLogLines([]);
-      setLogError('读取后端日志失败: ' + (ex && ex.message ? ex.message : String(ex)));
+      setLogViewError('读取后端日志失败: ' + (ex && ex.message ? ex.message : String(ex)));
     } finally {
       setLogLoading(false);
     }
@@ -1684,7 +1683,7 @@ export default function App() {
           title={logViewer === 'ui' ? 'UI 日志（前端）' : '后端日志（C++ singan2_debug.log）'}
           lines={logLines}
           loading={logLoading}
-          error={logError}
+          error={logViewError}
           onClose={() => setLogViewer(null)}
           onRefresh={logViewer === 'backend' ? () => openLogViewer('backend') : null}
         />
