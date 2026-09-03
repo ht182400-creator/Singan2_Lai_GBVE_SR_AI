@@ -128,6 +128,23 @@ export default function App() {
   const [ir1Img, setIr1Img] = useState(null);         // IR1 画布图像（来自 Data1）
   const [ir2Img, setIr2Img] = useState(null);         // IR2 画布图像（来自 Data2）
   const [busy, setBusy] = useState(false);
+  const [busyText, setBusyText] = useState('');
+  const [busyStart, setBusyStart] = useState(null);
+
+  const startBusy = useCallback((text) => {
+    setBusyText(text);
+    setBusyStart(Date.now());
+    setBusy(true);
+  }, []);
+  const stopBusy = useCallback(() => {
+    setBusy(false);
+  }, []);
+  useEffect(() => {
+    if (!busy) {
+      setBusyText('');
+      setBusyStart(null);
+    }
+  }, [busy]);
 
   // 最近路径下拉（复刻 IDC_NAME_COMBO / IDC_NAME_COMBO2 历史，持久化到 localStorage）
   const loadRecent = useCallback((key) => {
@@ -195,7 +212,7 @@ export default function App() {
   const loadImages = useCallback(async (rec1, rec2, wave, counts = {}) => {
     const c1 = counts.count1 ?? recordCount1;
     const c2 = counts.count2 ?? recordCount2;
-    setBusy(true);
+    startBusy('加载图像...');
     try {
       const [a, b] = await Promise.all([
         c1 > 0
@@ -234,13 +251,13 @@ export default function App() {
     } catch (e) {
       pushHistory(`图像加载失败: ${e.message}`);
     } finally {
-      setBusy(false);
+      stopBusy();
     }
   }, [datPath1, datPath2, recordCount1, recordCount2, wtablePath, redOffset, grnOffset, pushHistory]);
 
   const handleOpen = useCallback(async (path, panelIndex, jumpTo) => {
     const p = path || (panelIndex === 2 ? datPath2 : datPath1);
-    setBusy(true);
+    startBusy(`打开 Data${panelIndex}...`);
     try {
       const s = await openSession(p);
       logInfo(`openSession Data${panelIndex}`, { path: p, record_count: s.record_count, wave_count: s.wave_count });
@@ -278,7 +295,7 @@ export default function App() {
       setS2(null);          // 清空分析缓存，Validation 面板不再显示上一份图结果
       setEtc(null);
       pushHistory(`打开 Data${panelIndex} ${s.record_count} 枚（13 波段/枚）`);
-      setBusy(false);
+      stopBusy();
       const r1 = panelIndex === 1 ? target : record1;
       const r2 = panelIndex === 2
         ? target
@@ -292,20 +309,20 @@ export default function App() {
     } catch (e) {
       logError(`openSession Data${panelIndex} failed`, { path: p, message: e.message });
       pushHistory(`打开失败: ${e.message}`);
-      setBusy(false);
+      stopBusy();
     }
   }, [datPath1, datPath2, record1, record2, syncMove, recordCount2, viewWave, loadImages, pushHistory, prependRecent]);
 
   // 上传并打开本地 .dat（拖拽到 IR1→Data1 / IR2→Data2，或点 Open 选文件）：复刻 OLD DropDlg 拖入即加载
   const handleOpenFile = useCallback(async (file, panelIndex = 1) => {
-    setBusy(true);
+    startBusy('上传/打开文件...');
     try {
       const up = await uploadDat(file);
       pushHistory(`上传 ${up.name} → Data${panelIndex}`);
       await handleOpen(up.path, panelIndex, null);
     } catch (e) {
       pushHistory(`打开失败: ${e.message}`);
-      setBusy(false);
+      stopBusy();
     }
   }, [handleOpen, pushHistory]);
 
@@ -353,8 +370,8 @@ export default function App() {
   // ===== P1：运行分析（ALL32）=====
   // 当 IR1/IR2 为不同文件时，Data1/Data2 分别计算并各自显示 Result Details。
   const runAnalysis = useCallback(async () => {
-    setBusy(true);
     const need2 = datPath2 && recordCount2 > 0 && !(datPath1 === datPath2 && record1 === record2);
+    startBusy(`分析 Data1${need2 ? ' + Data2' : ''}...`);
     logInfo('runAnalysis start', { datPath1, datPath2, record1, record2, need2, zfilePath, kin, country });
     try {
       const tasks = [
@@ -384,7 +401,7 @@ export default function App() {
       logError('runAnalysis error', { message: e.message, stack: e.stack });
       pushHistory(`分析失败: ${e.message}`);
     } finally {
-      setBusy(false);
+      stopBusy();
     }
   }, [datPath1, datPath2, zfilePath, record1, record2, recordCount2, kin, country, pushHistory]);
 
@@ -395,7 +412,7 @@ export default function App() {
       pushHistory('Statistics：请先打开数据');
       return;
     }
-    setBusy(true);
+    startBusy(`Statistics ${start}/${step}/${times} ...`);
     try {
       const computeBatch = async (datPath, recordCount, label) => {
         const stepVal = step || 1;
@@ -474,14 +491,14 @@ export default function App() {
     } catch (e) {
       pushHistory(`Statistics 失败: ${e.message}`);
     } finally {
-      setBusy(false);
+      stopBusy();
     }
   }, [datPath1, datPath2, zfilePath, kin, country, recordCount1, recordCount2, mgInclude1, mgInclude2, pushHistory]);
 
   // ===== P2：图像处理（ImageEngine 算子）=====
   // 复刻 OLD NitiMain + NitiMain2：同一份阈值/算子分别施加到 Data1 / Data2，IR1 / IR2 同步更新
   const processImage = useCallback(async (ops) => {
-    setBusy(true);
+    startBusy(`图像处理 ${ops.map((o) => o.op).join('+')}...`);
     try {
       const tasks = [];
       if (datPath1) tasks.push(runImageOps({ datPath: datPath1, record: record1, wave: viewWave.name, ops, wtablePath }).then((img) => ({ panel: 1, img })));
@@ -495,7 +512,7 @@ export default function App() {
     } catch (e) {
       pushHistory(`图像处理失败: ${e.message}`);
     } finally {
-      setBusy(false);
+      stopBusy();
     }
   }, [datPath1, datPath2, record1, record2, viewWave, wtablePath, pushHistory]);
 
@@ -507,7 +524,7 @@ export default function App() {
   // ===== P3：Make Graph（复刻 OLD CreateGraph1 + ComputeSuppleResult：跨 record 像素统计）=====
   // IR1（file1，绿色）/ IR2（file2，蓝色）分别按 datPath1 / datPath2 计算，结果合并到 graphData.rows / rows2
   const handleMakeGraph = useCallback(async () => {
-    setBusy(true);
+    startBusy(`Make Graph ${mgStart}/${mgStep}/${mgTimes} ...`);
     try {
       const area = mousePos && mouseSize ? {
         areaX: mousePos.x,
@@ -550,7 +567,7 @@ export default function App() {
       logError('Make Graph error', { message: e.message, stack: e.stack });
       pushHistory(`Make Graph 失败: ${e.message}`);
     } finally {
-      setBusy(false);
+      stopBusy();
     }
   }, [datPath1, datPath2, recordCount2, mgInclude1, mgInclude2, viewWave, mousePos, mouseSize, ipParams, mgBw, mgStart, mgStep, mgTimes, wtablePath, pushHistory]);
 
@@ -1011,7 +1028,7 @@ export default function App() {
       )}
 
       {/* 底部全局状态栏（全宽 1800，位于窗口最底；Coordinate/Function 已移入） */}
-      <BottomStatusRow />
+      <BottomStatusRow busy={busy} busyText={busyText} busyStart={busyStart} />
 
       {activeDialog === 'confirm' && (
         <DialogModal

@@ -1,14 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * 底部状态条（DeepSeek 逆向 y633–670 全宽横跨 0–1283）：
- *  - 左侧：Coordinate File / Function Name File
+ *  - 左侧：Coordinate File / Function Name File + 当前操作/忙状态
  *  - 右侧：AppStatus 底栏（HongKong / IR offset / GP offset / MODE ...）
  */
-export default function BottomStatusRow() {
+export default function BottomStatusRow({ busy = false, busyText = '', busyStart = null }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!busy || !busyStart) {
+      setElapsed(0);
+      return;
+    }
+    const tick = () => setElapsed(Math.floor((Date.now() - busyStart) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [busy, busyStart]);
+
   return (
     <div className="bottom-status">
       <div className="bottom-status-left">
+        {busy && (
+          <span className="bs-busy" title={busyText}>
+            <span className="bs-spinner" /> {busyText} {elapsed > 0 && `(${elapsed}s)`}
+          </span>
+        )}
         <span>HongKong</span>
         <span>IR offset = 128</span>
         <span>GP offset = 128</span>

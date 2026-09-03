@@ -931,6 +931,9 @@ input, select, textarea {
 .bs-lbl { font-weight: 700; white-space: nowrap; }
 .bs-val-input { flex: 1 1 auto; min-width: 200px; font-size: 10px; font-family: monospace; }
 .bs-spacer { flex: 1; }
+.bs-busy { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #b35900; background: #fff7e6; border: 1px solid #ffd699; border-radius: 2px; padding: 2px 8px; }
+.bs-spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid #ccc; border-top-color: #b35900; border-radius: 50%; animation: bs-spin 1s linear infinite; }
+@keyframes bs-spin { to { transform: rotate(360deg); } }
 
 /* === Reduction Image 拆分两个 GroupBox（.rc X1101 / X1182） === */
 .ri-split { display: flex; flex-direction: column; gap: 4px; }
