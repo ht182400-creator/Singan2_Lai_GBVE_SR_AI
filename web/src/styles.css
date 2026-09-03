@@ -13,23 +13,51 @@ body {
   -webkit-font-smoothing: subpixel-antialiased;
 }
 
-/* 主窗口：1800 × 1050（用户认可左侧 900 宽；右侧再扩宽 100 → right-area 900，整体放大适配视口） */
+/* 可滚动视口：承载 .main-window，缩放后可通过滚动条查看全部内容 */
+.app-viewport {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  background: #2f2f2f;
+}
+
+/* 主窗口：2400 × 1450 固定坐标基准（2026-09-03 左侧扩宽 200px → 2200→2400）；zoom 由 JS 控制（拖右下角手柄缩放，内容等比缩放） */
 .main-window {
   position: relative;
   left: 0; top: 0;
-  width: 1800px;
-  min-height: 1050px;
+  width: 2400px;
+  min-height: 1450px;
   background: #c0c0c0;
   border: 1px solid #555;
-  overflow-y: auto;
-  transform: scale(min(100vw / 1800px, 100vh / 1050px));
   transform-origin: top left;
+}
+
+/* 右下角缩放手柄：拖拽改变全局 zoom（拉取放大 / 推送缩小） */
+.resize-handle {
+  position: absolute;
+  right: 0; bottom: 0;
+  width: 20px; height: 20px;
+  cursor: nwse-resize;
+  z-index: 999;
+  background:
+    linear-gradient(135deg, transparent 0 45%, #888 45% 55%, transparent 55% 65%, #888 65% 75%, transparent 75% 85%, #888 85% 95%, transparent 95% 100%);
+}
+
+/* 左侧主画布独立缩放手柄：拖拽整体放大/缩小左侧区（蓝色斜纹，区别于主窗口灰色手柄）
+ * 定位由内联 style 控制，始终贴着主画布缩放后的真实右下角 */
+.left-resize-handle {
+  position: absolute;
+  width: 18px; height: 18px;
+  cursor: nwse-resize;
+  z-index: 500;
+  background:
+    linear-gradient(135deg, transparent 0 40%, #316ac5 40% 52%, transparent 52% 60%, #316ac5 60% 72%, transparent 72% 80%, #316ac5 80% 92%, transparent 92% 100%);
 }
 
 /* === Top Menu Bar (22–44) === */
 .top-menu {
   position: absolute; left: 0; top: 22px;
-  width: 1800px; height: 22px;
+  width: 2400px; height: 22px;
   background: #ece9d8;
   border-bottom: 1px solid #888;
   display: flex; align-items: center; padding-left: 4px;
@@ -38,7 +66,7 @@ body {
 /* === Title Bar (0–22) === */
 .title-bar {
   position: absolute; left: 0; top: 0;
-  width: 1800px; height: 22px;
+  width: 2400px; height: 22px;
   background: #ece9d8;
   border-bottom: 1px solid #888;
   display: flex; align-items: center;
@@ -87,10 +115,17 @@ body {
 .top-menu-item:hover .caret,
 .top-menu-item.open .caret { color: #fff; }
 
+/* === 左侧区整体包裹：统一缩放 顶部按钮 + 图像 + databar（定位基准，作缩放手柄参考） === */
+.left-area {
+  position: absolute;
+  left: 0; top: 34px;
+  width: 1100px; height: 966px;
+}
+
 /* === Channel Tab (44–66) === */
 .channel-tab {
-  position: absolute; left: 0; top: 34px;
-  width: 900px; height: 34px;
+  position: absolute; left: 0; top: 0;
+  width: 1100px; height: 34px;
   background: #d4d0c8;
   display: flex; align-items: center;
   padding-left: 4px; gap: 2px; overflow-x: auto;
@@ -108,8 +143,8 @@ body {
 
 /* === Sub-Toolbar (66–88) === */
 .sub-toolbar {
-  position: absolute; left: 0; top: 68px;
-  width: 900px; height: 22px;
+  position: absolute; left: 0; top: 34px;
+  width: 1100px; height: 22px;
   background: #ece9d8; border-bottom: 1px solid #888;
   display: flex; align-items: center; padding: 0 4px; gap: 0; overflow-x: auto;
 }
@@ -122,23 +157,35 @@ body {
 .sub-btn-wide { flex: 0 0 90px; min-width: 90px; } /* 给 Red Ref_F/B 长文字足够宽度 */
 .sub-btn.active, .sub-btn:hover { background: #fff; color: #316ac5; border-color: #316ac5; }
 
-/* === 左侧主画布：X0–900（用户认可宽度），Y88 起延伸到底部状态栏上方 === */
-.main-canvas {
+/* 打开即预载全部波段开关（Sub-Toolbar 右侧，复刻 OLD 全文件常驻） */
+.preload-all-waves {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: #222; white-space: nowrap; margin-left: 6px;
+  user-select: none; cursor: pointer;
+}
+.preload-all-waves input { margin: 0; cursor: pointer; }
+
+/* === 左侧主画布：外层 wrap 绝对定位（未缩放，作手柄定位基准）；内层 .main-canvas 应用 leftZoom === */
+.main-canvas-wrap {
   position: absolute;
-  left: 0; top: 88px;
-  width: 900px;
+  left: 0; top: 54px;
+  width: 1100px;
   height: 912px;
+}
+.main-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
   background: #000;
   border: 1px solid #555;
   overflow: hidden;
 }
-/* === 右侧区：left900, 宽900, 高956（2026-08-23 高扩至与主画布底 1000 对齐；
- * 2026-08-23 再次上提 top 88→44，与左侧 Channel Tab / abs(IR-Gp) 按钮行顶部对齐） === */
+/* === 右侧区：left1100, 宽1300, 高1356（在 900×956 基础上 width +400 / height +400，
+ * 与主窗口 2400×1450 同步扩容；子面板坐标相对 right-area 不变） === */
 .right-area {
   position: absolute;
-  left: 900px; top: 44px;
-  width: 900px;
-  height: 956px;
+  left: 1100px; top: 44px;
+  width: 1300px;
+  height: 1356px;
   background: #ece9d8;
   overflow: auto; /* 2026-09-01：右侧容器太多，允许纵向/横向滚动，避免全部挤在狭小区域 */
 }
@@ -173,7 +220,7 @@ body {
   top: 0;
   width: 1px;
   height: 1px;
-  transform: translate(1000px, 1400px);
+  transform: translate(1400px, 1450px);
   pointer-events: none;
   opacity: 0;
   z-index: -1;
@@ -184,7 +231,26 @@ body {
  *   top  = rcY × V_SCALE ；V_SCALE = 912 / 682 ≈ 1.337（2026-08-23 右列高 682→912，纵向等比拉伸填满）
  *   width 按 ×1.201 折算；固定高度的面板（graph1/2、s2chart、vtb）高度同步 ×1.337 保持原版相对间距
  * 注：旧版 left=rcX-900 / 垂直 1:1 已废弃；本次纵向拉伸是为消除右列上下空白，相对布局比例不变。 */
-.rc { position: absolute; cursor: move; }
+.rc { position: absolute; cursor: move; display: flex; flex-direction: column; }
+
+/* 每个 .rc 卡片的内容体：flex:1 填满卡片宽高，使所有面板都能左右 + 上下缩放，
+   内部内容（fieldset / canvas）随卡片自适应填充。超出时卡片内滚动。 */
+.rc-body { flex: 1 1 auto; min-height: 0; overflow: auto; box-sizing: border-box; }
+/* 仅当卡片内容只有一个根元素时，让该根填满（多根面板如 op-history 保持自然堆叠） */
+.rc-body > *:first-child:last-child { height: 100%; min-height: 0; box-sizing: border-box; }
+
+/* 每个 .rc 卡片右下角的缩放手柄：拖拽改变该卡片宽高（内容随 flex/100% 自适应填充） */
+.rc-resize-handle {
+  position: absolute;
+  right: 0; bottom: 0;
+  width: 14px; height: 14px;
+  cursor: nwse-resize;
+  z-index: 20;
+  background:
+    linear-gradient(135deg, transparent 0 45%, #6a6a6a 45% 55%, transparent 55% 68%, #6a6a6a 68% 78%, transparent 78% 88%, #6a6a6a 88% 100%);
+}
+.rc-resize-handle:hover { background:
+    linear-gradient(135deg, transparent 0 45%, #2a6cff 45% 55%, transparent 55% 68%, #2a6cff 68% 78%, transparent 78% 88%, #2a6cff 88% 100%); }
 .rc legend, .rc .op-history-head, .rc .gasoti-panel legend, .rc .result-details legend, .rc .val-compact legend { cursor: move; }
 .rc input, .rc textarea, .rc select, .rc button, .rc label { cursor: auto; }
 .rc input, .rc textarea { cursor: text; }
@@ -222,23 +288,24 @@ body {
 /* Operation 移到 Make Graph 正下方；Table Function 下拉已移入 Operation History 容器（对应原版 resource.rc x=715,y=55），此处恢复原尺寸 */
 .rc-operation { left: 20px; top: 870px; width: 520px; height: 180px; z-index: 5; }
 /* Graph1/Graph2/Result Details 合并为单一「Graph 结果」面板（更友好、减少零散容器） */
-.rc-graph-result { left: 555px; top: 500px; width: 325px; height: 840px; display: flex; flex-direction: column; }
+.rc-graph-result { left: 555px; top: 500px; width: 525px; height: 840px; display: flex; flex-direction: column; }
 .graph-plot { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #fff; font-size: 10px; }
 .gp-header { display: flex; justify-content: space-between; gap: 6px; padding: 1px 4px; border-bottom: 1px solid #999; font-family: monospace; white-space: nowrap; }
 .gp-body { flex: 1; display: flex; min-height: 0; }
 .gp-svg { flex: 1; width: auto; height: 100%; background: #fff; }
 .gp-stats { width: 150px; padding: 2px 4px; font-family: monospace; border-left: 1px solid #ccc; white-space: nowrap; }
 /* S2Chart：加高以显示更多 record 值；Operation 在其上方，互不重叠 */
-.rc-s2chart { left: 555px; top: 1360px; width: 325px; height: 280px; z-index: 5; display: flex; flex-direction: column; }
+.rc-s2chart { left: 555px; top: 1360px; width: 525px; height: 280px; z-index: 5; display: flex; flex-direction: column; }
 .rc-s2chart.dual { height: 525px; } /* 双文件时加高，让 IR1/IR2 各图表都有足够显示空间 */
-.rc-s2chart > .s2-chart { flex: 1; min-height: 0; }
+.rc-s2chart .s2-chart { flex: 1; min-height: 0; }
 /* Notes / TH 行下移到 S2Chart 下方 */
 .rc-notes { left: 20px; top: 1890px; width: 520px; height: 50px; z-index: 4; }
-.rc-th-row { left: 555px; top: 1890px; width: 325px; height: 50px; z-index: 4; }
+.rc-th-row { left: 555px; top: 1890px; width: 525px; height: 50px; z-index: 4; }
 
 /* 原版真实存在但曾被误删的区域（resource.rc 证实） */
 .rc-vtb { left: 362px; top: 197px; width: 438px; height: 161px; }  /* rc 915,147 VTB 区 (右对齐至 800) */
 .rc-atb { left: 364px; top: 5px; width: 217px; }                /* rc 917,4 ATB 区 (181→217) */
+.rc-file-paths { left: 19px; top: 864px; width: 785px; height: 110px; z-index: 6; }  /* rc 629,646 Coordinate/Function Name File */
 .rc-op-history { left: 122px; top: 8px; width: 300px; z-index: 6; }  /* rc 714,6 Operation History，加宽以容纳 Table Function 下拉(原版 715,55 宽197) */
 .op-history-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
 .op-history-list { width: 100%; height: 54px; font-size: 10px; }
@@ -342,6 +409,15 @@ body {
   background: #e8e6de; border: 1px solid #bbb; border-radius: 2px;
   cursor: help;
 }
+.stat-diag {
+  width: 100%; font-size: 10px; margin-top: 4px; padding: 4px 6px;
+  background: #f4f4ec; border: 1px solid #9aa; border-radius: 3px;
+  font-family: ui-monospace, Menlo, Consolas, monospace; line-height: 1.4;
+}
+.stat-diag-ok { color: #1a6b1a; }
+.stat-diag-err { color: #b00020; font-weight: 700; }
+.stat-diag-errs { color: #b00020; }
+.stat-diag-time { color: #555; }
 
 /* === Image Pane === */
 .image-stack {
@@ -446,32 +522,34 @@ body {
 /* === Data Selector inside main canvas === */
 .main-canvas .data-selector {
   position: relative; left: 0; top: 0;
-  width: 100%; height: 22px;
+  width: 100%; flex: 1 1 0; min-height: 0;
   background: #d4d0c8;
   border-top: 1px solid #555;
   border-bottom: 1px solid #555;
-  display: flex; align-items: center; gap: 4px;
-  padding: 0 6px;
+  display: flex; align-items: stretch; gap: 6px;
+  padding: 0 8px; font-size: 15px;
 }
-.main-canvas .data-selector .btn { padding: 1px 6px; font-size: 11px; min-width: 0; }
-.data-label { font-size: 11px; font-weight: 700; margin-left: 4px; display: inline-flex; align-items: center; gap: 3px; }
-.data-combo { padding: 1px; min-width: 70px; }
-.data-count { width: 40px; padding: 1px; }
-.data-path-combo { flex: 0 0 394px; position: relative; display: flex; align-items: center; }
-.data-path { flex: 1; min-width: 0; padding: 1px 4px; font-family: monospace; font-size: 10px; border: 1px solid #555; border-right: none; }
-.data-path-arrow { padding: 1px 4px; font-size: 10px; border: 1px solid #555; background: #d4d0c8; cursor: pointer; }
+.main-canvas .data-selector .btn { padding: 0 10px; font-size: 15px; min-width: 0; }
+.data-label { font-size: 15px; font-weight: 700; margin-left: 6px; display: inline-flex; align-items: center; gap: 4px; }
+.data-combo { padding: 4px; min-width: 90px; font-size: 14px; }
+.data-count { width: 64px; padding: 4px; font-size: 14px; }
+.data-path-combo { flex: 0 0 394px; position: relative; display: flex; align-items: stretch; }
+.data-path { flex: 1; min-width: 0; padding: 4px 6px; font-family: monospace; font-size: 14px; border: 1px solid #555; border-right: none; }
+.data-path-arrow { padding: 0 8px; font-size: 14px; border: 1px solid #555; background: #d4d0c8; cursor: pointer; }
 .data-path-arrow:hover { background: #ece9d8; }
-.data-path-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; max-height: 120px; overflow-y: auto; background: #fff; border: 1px solid #555; list-style: none; margin: 0; padding: 0; font-size: 10px; font-family: monospace; }
-.data-path-dropdown li { padding: 2px 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.data-path-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; max-height: 160px; overflow-y: auto; background: #fff; border: 1px solid #555; list-style: none; margin: 0; padding: 0; font-size: 14px; font-family: monospace; }
+.data-path-dropdown li { padding: 4px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .data-path-dropdown li:hover { background: #0a246a; color: #fff; }
-.data-divider { font-weight: 700; }
-.data-total { padding: 1px 4px; background: #fff; border: 1px solid #555; min-width: 24px; text-align: center; }
-.data-batch { padding: 1px 4px; font-size: 10px; color: #333; }
+.data-divider { font-weight: 700; font-size: 15px; }
+.data-total { padding: 4px 6px; background: #fff; border: 1px solid #555; min-width: 36px; text-align: center; font-size: 14px; }
+.data-batch { padding: 4px 6px; font-size: 13px; color: #333; }
 .main-canvas .data-selector-stack {
   width: 100%;
+  display: flex; flex-direction: column;
   background: #d4d0c8;
   border-top: 1px solid #555;
   border-bottom: 1px solid #555;
+  min-height: 146px; /* 两行 22px + 边框约 46px，再加 100px；两行 flex:1 均分填充 */
 }
 
 /* === Right Panels 内部 === */
@@ -485,7 +563,7 @@ fieldset legend {
 }
 
 /* Mouse Point Compact（2026-08-23 改为纵向紧凑堆叠，避免 96px 宽度内平铺导致溢出到 Operation History） */
-.mp-compact { padding: 2px 4px; display: flex; flex-direction: column; gap: 2px; }
+.mp-compact { padding: 2px 4px; display: flex; flex-direction: column; gap: 2px; height: 100%; box-sizing: border-box; }
 .mp-compact legend { font-size: 10px; padding: 0 2px; }
 .mp-row { display: flex; align-items: center; gap: 3px; }
 .mp-row .btn-xs { padding: 1px 4px; font-size: 9px; min-width: 0; }
@@ -923,10 +1001,50 @@ input, select, textarea {
 .ga-plot { flex: 1.2; border: 1px solid #888; background: #fff; }
 .ga-meta { font-size: 10px; display: inline-flex; gap: 2px; align-items: center; }
 
+/* === Coordinate / Function Name File 面板（已从底栏移入右侧 RC） === */
+.file-path-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 6px 6px;
+  margin: 0;
+  border: 2px groove #808080;
+  background: #d4d0c8;
+  box-sizing: border-box;
+  height: 100%;
+}
+.file-path-panel legend {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+.fp-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+}
+.fp-lbl {
+  width: 110px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fp-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  font-family: monospace;
+  padding: 2px 4px;
+  border: 1px solid #555;
+  background: #fff;
+}
+
 /* === BottomStatusRow（resource.rc y633–670） === */
-.bottom-status { position: absolute; left: 0; bottom: 0; width: 1800px; height: 40px; font-size: 10px; background: #d4d0c8; z-index: 10; display: flex; align-items: center; justify-content: flex-start; padding: 2px 6px; }
+.bottom-status { position: absolute; left: 0; bottom: 0; width: 2000px; height: 40px; font-size: 10px; background: #d4d0c8; z-index: 10; display: flex; align-items: center; justify-content: flex-start; padding: 2px 6px; }
 .bottom-status-left { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
-.bottom-status-right { position: absolute; left: 900px; top: 2px; display: flex; flex-direction: column; gap: 2px; }
+.bottom-status-right { position: absolute; left: 1100px; top: 2px; display: flex; flex-direction: column; gap: 2px; }
 .bs-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
 .bs-lbl { font-weight: 700; white-space: nowrap; }
 .bs-val-input { flex: 1 1 auto; min-width: 200px; font-size: 10px; font-family: monospace; }
@@ -965,7 +1083,7 @@ input, select, textarea {
   position: absolute;
   left: 0;
   top: 88px;
-  width: 1800px;
+  width: 2000px;
   height: 912px;
   background: #ece9d8;
   border-top: 2px solid #999;
@@ -974,7 +1092,7 @@ input, select, textarea {
   box-sizing: border-box;
 }
 .gvo-left {
-  width: 900px;
+  width: 1100px;
   display: flex;
   flex-direction: column;
   padding: 4px;

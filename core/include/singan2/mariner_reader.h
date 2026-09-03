@@ -30,6 +30,12 @@ void   file_cache_clear();            // 清空缓存
 // 越界/失败时返回空 vector
 std::vector<uint8_t> extract_mm1_side(const std::string& file_path, int record_index = 0);
 
+// 一次提取整文件某个波段（wave_name，如 "Img1".."Img22" 中已落盘的原始 13 波段）的全部 record 像素，
+// 拼成 record_count * ONESIZE 的扁平缓冲（record r 的像素位于 [r*ONESIZE, (r+1)*ONESIZE)）。
+// 供网页「整通道一次载入、逐帧秒切」使用（对应 OLD 文件常驻内存 + 指针直取，翻帧零磁盘/零网络）。
+// 越界 / 不支持的波段名返回空 vector。
+std::vector<uint8_t> extract_wave_all(const std::string& file_path, const std::string& wave_name);
+
 // 提取指定枚的 global_small_image(SMALL_SIZE 字节)
 std::vector<uint8_t> extract_small_image(const std::string& file_path, int record_index = 0);
 

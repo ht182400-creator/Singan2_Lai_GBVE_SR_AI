@@ -77,7 +77,15 @@ export default function ImagePane({
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  const pixels = useMemo(() => (imageData ? decodeImage(imageData) : null), [imageData]);
+  // 优先使用已解码的原始灰度缓冲（整通道预载场景：imageData.gray 为 Uint8Array，
+  // 翻帧时只做内存切片、无需再走 base64 解码）；否则回退到 /api/image 的 base64 解码路径。
+  const pixels = useMemo(() => {
+    if (!imageData) return null;
+    if (imageData.gray) {
+      return { width: imageData.width, height: imageData.height, gray: imageData.gray };
+    }
+    return decodeImage(imageData);
+  }, [imageData]);
   // 自由手拖拽中暂存（图像像素坐标）
   const [drag, setDrag] = useState(null);
 

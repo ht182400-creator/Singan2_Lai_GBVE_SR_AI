@@ -5,12 +5,25 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace singan2 {
 namespace {
+
+// 坐标文件解析结果缓存：批量分析 1044 枚时，原 run_algorithm 每枚都重新解析 zfile，
+// 造成大量重复 I/O/解析；按 zfile_path 缓存后只解析一次。
+struct ZahyoCache {
+    std::mutex mu;
+    std::map<std::string, ZAHYO_PARAM> data;
+};
+ZahyoCache& zahyo_cache() {
+    static ZahyoCache c;
+    return c;
+}
 
 // 文件头: Shift-JIS【すかし１】(与 poc FILE_HEADER_BYTES 一致)
 const uint8_t FILE_HEADER_BYTES[12] = {
@@ -123,7 +136,20 @@ int ZAHYO_PARAM::at(const std::string& section, const std::string& field, int ki
     return get(section + "_" + field, kin);
 }
 
+// 真正的 zfile 解析实现（按文件缓存，见 parse_zahyo_param）
+ZAHYO_PARAM parse_zahyo_param_impl(const std::string& file_path);
+
 ZAHYO_PARAM parse_zahyo_param(const std::string& file_path) {
+    {
+        ZahyoCache& c = zahyo_cache();
+        std::lock_guard<std::mutex> lk(c.mu);
+        auto it = c.data.find(file_path);
+        if (it != c.data.end()) return it->second;
+    }
+    return parse_zahyo_param_impl(file_path);
+}
+
+ZAHYO_PARAM parse_zahyo_param_impl(const std::string& file_path) {
     std::ifstream fp(file_path, std::ios::binary);
     if (!fp) throw std::runtime_error("无法打开坐标文件: " + file_path);
 
@@ -189,6 +215,11 @@ ZAHYO_PARAM parse_zahyo_param(const std::string& file_path) {
             }
         }
         row++;
+    }
+    {
+        ZahyoCache& c = zahyo_cache();
+        std::lock_guard<std::mutex> lk(c.mu);
+        c.data[file_path] = zp;
     }
     return zp;
 }

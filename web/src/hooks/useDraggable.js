@@ -7,7 +7,7 @@ const PREFIX = 'rcpos:';
  * 仅在非交互元素（标题栏/卡片空白区）上按下时触发拖动，
  * 点击 input/textarea/select/button 等控件不会误拖。
  */
-export function useDraggable(id, dl, dt) {
+export function useDraggable(id, dl, dt, zoom = 1) {
   const [pos, setPos] = useState(() => {
     try {
       const s = localStorage.getItem(PREFIX + id);
@@ -33,9 +33,10 @@ export function useDraggable(id, dl, dt) {
     const sy = e.clientY;
     const ol = pos.left;
     const ot = pos.top;
+    const z = zoom > 0 ? zoom : 1;
     const onMove = (ev) => {
-      const nl = Math.max(0, ol + ev.clientX - sx);
-      const nt = Math.max(0, ot + ev.clientY - sy);
+      const nl = Math.max(0, ol + (ev.clientX - sx) / z);
+      const nt = Math.max(0, ot + (ev.clientY - sy) / z);
       setPos({ left: nl, top: nt });
     };
     const onUp = () => {

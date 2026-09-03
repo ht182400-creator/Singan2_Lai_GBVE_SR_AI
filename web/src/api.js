@@ -54,6 +54,31 @@ export async function getSmallImage({ datPath, record = 0 }) {
   return postJson('/api/small-image', { dat_path: datPath, record });
 }
 
+// 整通道批量下发（网页「秒载 1000 张」核心）：一次取回某波段全部 record 的像素扁平缓冲，
+// 浏览器常驻为 Uint8Array 后翻帧只做内存切片、零网络。
+// 返回 { width, height, recordCount, data: Uint8Array }（data 长度 = recordCount*width*height）。
+// 失败时（波段不支持 / 越界）服务端返回 4xx，这里抛 Error。
+export async function getChannelFrames({ datPath, wave = 'Img1' }) {
+  const r = await fetch('/api/images/channel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dat_path: datPath, wave }),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j && j.error) msg = j.error;
+    } catch (e) { /* 忽略解析错误 */ }
+    throw new Error(msg);
+  }
+  const buf = new Uint8Array(await r.arrayBuffer());
+  const width = parseInt(r.headers.get('X-Width') || '186', 10);
+  const height = parseInt(r.headers.get('X-Height') || '88', 10);
+  const recordCount = parseInt(r.headers.get('X-Record-Count') || '0', 10);
+  return { width, height, recordCount, data: buf };
+}
+
 // ============ P1 分析链路 ============
 
 // 以本地路径方式分析（联调/审阅最常用）

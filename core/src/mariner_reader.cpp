@@ -1,6 +1,7 @@
 #include "singan2/mariner_reader.h"
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <list>
 #include <map>
@@ -151,17 +152,30 @@ void file_cache_clear() {
     c.total = 0;
 }
 
-std::vector<BlockInfo> parse_blocks(const std::string& file_path) {
-    return parse_blocks_data(load_file_cached(file_path));
+// ---- MM1_Side 偏移缓存（按文件缓存 type=5 块偏移列表）----
+// 批量分析 1044 枚时，原 extract_mm1_side 每次都扫描整个 .dat 文件，
+// 造成 O(n*m) 重复扫描；缓存 side_offsets 后只需一次扫描。
+namespace {
+struct SideOffsetsCache {
+    std::mutex mu;
+    std::map<std::string, std::vector<uint32_t>> data;
+};
+SideOffsetsCache& side_offsets_cache() {
+    static SideOffsetsCache c;
+    return c;
 }
+}  // namespace
 
-std::vector<uint8_t> extract_mm1_side(const std::string& file_path, int record_index) {
-    const std::vector<uint8_t>& data = load_file_cached(file_path);
-    if (data.empty()) return {};
-
-    // 单次扫描收集 MM1_Side(type=5) 块偏移
-    std::vector<uint32_t> side_offsets;
+static std::vector<uint32_t> get_side_offsets(const std::string& file_path) {
+    SideOffsetsCache& c = side_offsets_cache();
     {
+        std::lock_guard<std::mutex> lk(c.mu);
+        auto it = c.data.find(file_path);
+        if (it != c.data.end()) return it->second;
+    }
+    const std::vector<uint8_t>& data = load_file_cached(file_path);
+    std::vector<uint32_t> offsets;
+    if (!data.empty()) {
         const size_t n = data.size();
         const bool is_sru = (n >= 3 && data[0] == 'S' && data[1] == 'R' && data[2] == 'U');
         size_t offset = is_sru ? 3 : 0;
@@ -171,12 +185,70 @@ std::vector<uint8_t> extract_mm1_side(const std::string& file_path, int record_i
                                  (static_cast<uint32_t>(h[1]) << 8) |
                                  (static_cast<uint32_t>(h[2]) << 16) |
                                  (static_cast<uint32_t>(h[3]) << 24);
-            if (h[4] == 5) side_offsets.push_back(static_cast<uint32_t>(offset));
+            if (h[4] == 5) offsets.push_back(static_cast<uint32_t>(offset));
             if (data_size == 0) break;
             offset += data_size;
         }
     }
+    std::lock_guard<std::mutex> lk(c.mu);
+    c.data[file_path] = offsets;
+    return c.data[file_path];
+}
 
+// ---- Small image 元数据缓存（按文件缓存 one_data_size / length_mm_file_header）----
+namespace {
+struct SmallMetaCache {
+    std::mutex mu;
+    std::map<std::string, std::pair<uint32_t, uint32_t>> data;
+};
+SmallMetaCache& small_meta_cache() {
+    static SmallMetaCache c;
+    return c;
+}
+}  // namespace
+
+static std::pair<uint32_t, uint32_t> get_small_meta(const std::string& file_path) {
+    SmallMetaCache& c = small_meta_cache();
+    {
+        std::lock_guard<std::mutex> lk(c.mu);
+        auto it = c.data.find(file_path);
+        if (it != c.data.end()) return it->second;
+    }
+    const std::vector<uint8_t>& data = load_file_cached(file_path);
+    uint32_t length_mm_file_header = 0;
+    uint32_t one_data_size = 0;
+    if (!data.empty()) {
+        auto blocks = parse_blocks_data(data);
+        bool first_data = false;
+        for (const auto& b : blocks) {
+            const int itype = std::get<1>(b);
+            const uint32_t dsize = std::get<2>(b);
+            if (itype == 0) {  // Head1
+                length_mm_file_header = dsize;
+                continue;
+            }
+            if (itype == 1) {  // Head2
+                if (first_data) break;
+                first_data = true;
+            }
+            one_data_size += dsize;
+        }
+    }
+    std::pair<uint32_t, uint32_t> meta{one_data_size, length_mm_file_header};
+    std::lock_guard<std::mutex> lk(c.mu);
+    c.data[file_path] = meta;
+    return c.data[file_path];
+}
+
+std::vector<BlockInfo> parse_blocks(const std::string& file_path) {
+    return parse_blocks_data(load_file_cached(file_path));
+}
+
+std::vector<uint8_t> extract_mm1_side(const std::string& file_path, int record_index) {
+    const std::vector<uint8_t>& data = load_file_cached(file_path);
+    if (data.empty()) return {};
+
+    std::vector<uint32_t> side_offsets = get_side_offsets(file_path);
     const int start = record_index * WAVE_COUNT;
     if (start < 0 || start + WAVE_COUNT > static_cast<int>(side_offsets.size())) {
         return {};
@@ -192,27 +264,62 @@ std::vector<uint8_t> extract_mm1_side(const std::string& file_path, int record_i
     return global_onedat;
 }
 
+// 波段名(13 个原始波段) -> 块内序号 k（与 build_onebyte_images 的 kImgName 一一对应）。
+// 其余波段(Img7..Img15 等中间波段)为运行时计算，不落盘，返回 -1。
+static int wave_name_to_k(const std::string& name) {
+    static const char* kImgName[WAVE_COUNT] = {
+        "Img1", "Img20", "Img21", "Img22", "Img2", "Img3", "Img4",
+        "Img5", "Img6", "Img16", "Img17", "Img18", "Img19"
+    };
+    for (int k = 0; k < WAVE_COUNT; ++k) {
+        if (name == kImgName[k]) return k;
+    }
+    return -1;
+}
+
+std::vector<uint8_t> extract_wave_all(const std::string& file_path, const std::string& wave_name) {
+    const auto t0 = std::chrono::steady_clock::now();
+    const std::vector<uint8_t>& data = load_file_cached(file_path);
+    const auto t1 = std::chrono::steady_clock::now();
+    if (data.empty()) return {};
+
+    const int k = wave_name_to_k(wave_name);
+    if (k < 0) return {};
+
+    std::vector<uint32_t> side_offsets = get_side_offsets(file_path);
+    const auto t2 = std::chrono::steady_clock::now();
+    const int count = static_cast<int>(side_offsets.size()) / WAVE_COUNT;
+    if (count <= 0) return {};
+
+    // 单枚单波段的像素位于第 r 枚第 k 块内，块头之后即 ONESIZE 字节（块内无额外 stride）。
+    // 直接 memcpy 进预分配缓冲：避免 std::vector::insert 在 Debug 下逐元素的迭代器调试检查
+    // （1044 枚 × ONESIZE ≈ 17MB 逐字节检查会慢到数秒）；Release 下两者等价。
+    const size_t stride = static_cast<size_t>(ONESIZE);
+    std::vector<uint8_t> out(stride * static_cast<size_t>(count));
+    const uint8_t* src_base = data.data();
+    uint8_t* dst = out.data();
+    for (int r = 0; r < count; ++r) {
+        const size_t rec_base =
+            static_cast<size_t>(side_offsets[r * WAVE_COUNT + k]) + BLOCK_HEADER;
+        if (rec_base + stride > data.size()) break;  // 越界保护
+        memcpy(dst + static_cast<size_t>(r) * stride, src_base + rec_base, stride);
+    }
+    const auto t3 = std::chrono::steady_clock::now();
+    fprintf(stderr, "[extract_wave_all] load=%.1fms offsets=%.1fms copy=%.1fms count=%d bytes=%zu\n",
+            std::chrono::duration<double, std::milli>(t1 - t0).count(),
+            std::chrono::duration<double, std::milli>(t2 - t1).count(),
+            std::chrono::duration<double, std::milli>(t3 - t2).count(),
+            count, out.size());
+    return out;
+}
+
 std::vector<uint8_t> extract_small_image(const std::string& file_path, int record_index) {
     const std::vector<uint8_t>& data = load_file_cached(file_path);
     if (data.empty()) return {};
 
-    auto blocks = parse_blocks_data(data);
-    uint32_t length_mm_file_header = 0;
-    uint32_t one_data_size = 0;
-    bool first_data = false;
-    for (const auto& b : blocks) {
-        const int itype = std::get<1>(b);
-        const uint32_t dsize = std::get<2>(b);
-        if (itype == 0) {  // Head1
-            length_mm_file_header = dsize;
-            continue;
-        }
-        if (itype == 1) {  // Head2
-            if (first_data) break;
-            first_data = true;
-        }
-        one_data_size += dsize;
-    }
+    const auto meta = get_small_meta(file_path);
+    const uint32_t one_data_size = meta.first;
+    const uint32_t length_mm_file_header = meta.second;
     const uint32_t offset = one_data_size * static_cast<uint32_t>(record_index) +
                             length_mm_file_header + BLOCK_HEADER;
     if (offset + SMALL_SIZE > data.size()) return {};

@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <chrono>
 #include <cstdio>
 #include <cstdint>
 #include <ctime>
@@ -695,6 +696,33 @@ int main(int argc, char** argv) {
         send_ok(res, body);
     });
 
+    // ============ 整通道批量下发（网页「秒载 1000 张」核心）============
+    // OLD MFC 把整文件常驻内存，翻帧只是 fseek+memcpy（亚毫秒）；网页版若逐帧发 HTTP+base64
+    // 则每帧一次往返。本端点一次返回某波段全部 record 的像素为二进制扁平缓冲
+    // (record_count * ONESIZE 字节)，浏览器常驻为 Uint8Array 后翻帧只做内存切片，零网络、瞬时。
+    // 现代图像序列/医学影像查看器（OHIF、Napari、视频帧播放器）均采用此「整序列预载」范式。
+    svr.Post("/api/images/channel", [](const httplib::Request& req, httplib::Response& res) {
+        std::string dat_path = json_get_str(req.body, "dat_path", "");
+        std::string wave = json_get_str(req.body, "wave", "Img1");
+        if (dat_path.empty()) {
+            send_err(res, 400, "dat_path 必填");
+            return;
+        }
+        std::vector<uint8_t> buf = singan2::extract_wave_all(dat_path, wave);
+        fprintf(stderr, "[channel] extract_wave_all done: bytes=%zu\n", buf.size());
+        if (buf.empty()) {
+            send_err(res, 400, "波段不支持或文件损坏/越界: " + wave);
+            return;
+        }
+        set_cors(res);
+        res.set_header("X-Width", std::to_string(singan2::X_SIZE));
+        res.set_header("X-Height", std::to_string(singan2::Y_SIZE));
+        res.set_header("X-Record-Count",
+                       std::to_string(static_cast<int>(buf.size()) / singan2::ONESIZE));
+        res.set_header("X-Encoding", "u8");
+        res.set_content(std::string(buf.begin(), buf.end()), "application/octet-stream");
+    });
+
     // ============ 文件缓存管理（mariner_reader 进程级 LRU 缓存）============
     svr.Get("/api/cache/stats", [](const httplib::Request&, httplib::Response& res) {
         size_t cap = singan2::file_cache_capacity();
@@ -756,6 +784,7 @@ int main(int argc, char** argv) {
             return;
         }
         try {
+            auto t0 = std::chrono::steady_clock::now();
             auto blocks = singan2::parse_blocks(dat_path);
             int side_count = 0;
             for (const auto& b : blocks) if (std::get<1>(b) == 5) side_count++;  // MM1_Side
@@ -823,8 +852,11 @@ int main(int argc, char** argv) {
                 debug_log(dbg);
             }
 
+            auto t1 = std::chrono::steady_clock::now();
+            long long elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
             std::string body = "{\"count\":" + std::to_string(n)
-                             + ",\"record_count\":" + std::to_string(record_count) + ",\"results\":[";
+                             + ",\"record_count\":" + std::to_string(record_count)
+                             + ",\"elapsed_ms\":" + std::to_string(elapsed_ms) + ",\"results\":[";
             for (int i = 0; i < n; i++) {
                 if (i) body += ",";
                 int rec = std::max(0, std::min(record_count - 1, startVal + i * step));
@@ -1455,6 +1487,11 @@ int main(int argc, char** argv) {
 
     // 本地单机构建工具：上传的 .dat 可达数百 MB，放宽 httplib 默认 100MB 上传上限到 4GB
     svr.set_payload_max_length(4UL * 1024 * 1024 * 1024);
+
+    // 关闭 Nagle 算法（TCP_NODELAY）。否则大响应体（如整通道 17MB 二进制）在回环网卡上
+    // 会因 Nagle + 延迟 ACK 相互等待而严重降速（21KB 小响应不受影响，17MB 可慢到 10+ 秒）。
+    // 本服务仅本地单机使用，关闭 Nagle 无副作用，大块下发吞吐立即恢复。
+    svr.set_tcp_nodelay(true);
 
     // 并发模型：httplib 默认即为多线程（线程池 base=max(8, 硬件线程数-1)、max=4×base），
     // 这里显式声明以保持意图清晰，并集中在一处便于按需调大并发上限。

@@ -32,6 +32,7 @@ export default function MakeGraphRow({
   times = 5, setTimes,
   total,
   cmp12 = false, setCmp12,
+  statDiag = null,
 }) {
   // 生成函数列选项：S2[1..32] + 业务名称 + ETC[1..12]
   const opts = [];
@@ -137,6 +138,19 @@ export default function MakeGraphRow({
       >
         Statistics
       </button>
+      {statDiag && statDiag.length > 0 && (
+        <div className="stat-diag" title="Statistics 批量分析诊断：请求/返回/有效/跳过 数量，便于定位 1044 不返回等问题">
+          {statDiag.map((d, i) => (
+            <div key={i} className={d.valid === 0 ? 'stat-diag-err' : 'stat-diag-ok'}>
+              [{d.label}] 请求 {d.requested} 枚 / 返回 {d.returned} 条 / 有效 {d.valid} 条 / 跳过 {d.skipped} 条
+              {Number(d.backendMs) > 0 && <span className="stat-diag-time"> ｜ 服务端耗时 {d.backendMs} ms</span>}
+              {d.errors && d.errors.length > 0 && (
+                <span className="stat-diag-errs"> ｜ 样例错误：{d.errors.slice(0, 3).join(' / ')}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,8 @@ SINGAN2 算法的现代化重构版本：纯 C++17 算法核心 + HTTP API + Web
 
 > 算法正确性以 `poc/`（Python 参考实现）为基准；`poc/output/` 下的产物作为 C++ 对拍的 golden。
 
+![原版主界面](docs/assets/main_ui.png)
+
 ## 阶段状态
 
 | 阶段 | 内容 | 状态 |

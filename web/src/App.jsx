@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { ZoomContext } from './zoomContext.js';
 
 import TopMenuBar from './components/TopMenuBar.jsx';
 import TitleBar from './components/TitleBar.jsx';
@@ -20,6 +21,7 @@ import MakeGraphRow from './components/MakeGraphRow.jsx';
 import GraphFileRow from './components/GraphFileRow.jsx';
 import S2Chart from './components/S2Chart.jsx';
 import BottomStatusRow from './components/BottomStatusRow.jsx';
+import FilePathPanel from './components/FilePathPanel.jsx';
 import { arrayToText, buildResultRows, s2ToTextList, normalizeS2, normalizeEtc, S2_FUNC_NAMES, shouldAnalyzeData2 } from './utils/analysis.js';
 import { buildGraphStats } from './utils/graphStats.js';
 import { downloadTextFile } from './utils/file.js';
@@ -37,7 +39,7 @@ import GraphViewOverlay from './components/GraphViewOverlay.jsx';
 
 import {
   openSession, getImage, analyzeByPath, analyzeBatchByPath, runImageOps, makeGraph, getSmallImage,
-  parseZfile, uploadDat,
+  getChannelFrames, parseZfile, uploadDat,
 } from './api.js';
 
 // ---------------------------------------------------------------------------
@@ -113,6 +115,64 @@ export default function App() {
   const [atbSel, setAtbSel] = useState(-1);
   const [atbRadio, setAtbRadio] = useState(0);
 
+  // ---- 全局缩放（拖右下角手柄缩放，内容等比放大/缩小）----
+  const BASE_W = 2400; // .main-window 基准宽度（styles.css 一致，2026-09-03 左侧扩宽 200 → 2200→2400）
+  const BASE_H = 1450; // .main-window 基准高度
+  const [zoom, setZoom] = useState(() =>
+    typeof window !== 'undefined'
+      ? Math.min(window.innerWidth / BASE_W, window.innerHeight / BASE_H)
+      : 1);
+  const viewportRef = useRef(null);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const onResizeHandleDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const vp = viewportRef.current;
+    const move = (ev) => {
+      const rect = vp.getBoundingClientRect();
+      const x = ev.clientX - rect.left + vp.scrollLeft;
+      const y = ev.clientY - rect.top + vp.scrollTop;
+      const z = Math.min(x / BASE_W, y / BASE_H);
+      setZoom(Math.max(0.3, Math.min(3, z)));
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }, []);
+
+  // ---- 左侧区整体缩放（拖右下角手柄缩放，作用于 .left-area：顶部按钮 + 图像 + databar，不影响右侧）----
+  const BASE_LW = 1100; // .left-area 基准宽（styles.css .left-area 一致）
+  const BASE_LH = 966; // .left-area 基准高（top34 + main-canvas 912 = 1000；1000-34=966）
+  const [leftZoom, setLeftZoom] = useState(1);
+  const leftZoomRef = useRef(leftZoom);
+  leftZoomRef.current = leftZoom;
+  const onLeftResizeHandleDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = e.currentTarget.parentElement; // .left-area（未缩放，作为定位基准）
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const ox = rect.left, oy = rect.top;
+    const sx = e.clientX, sy = e.clientY;
+    const sdx = sx - ox, sdy = sy - oy; // 初始指针相对 wrap 左上角的屏幕偏移
+    const startZ = leftZoomRef.current;
+    const move = (ev) => {
+      const dx = ev.clientX - ox, dy = ev.clientY - oy;
+      const f = Math.min(dx / sdx, dy / sdy); // 等比缩放（取较小轴，贴合手柄拖拽）
+      setLeftZoom(Math.max(0.3, Math.min(4, startZ * f)));
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }, []);
+
   // ---- P0 会话 / 数据状态（对应 MAIN.H global_Mai / global_oneimg）----
   // Data1 / Data2：复刻 MFC 双文件路径，可分别打开不同 .dat（global_FileName / global_FileName2）
   const [datPath1, setDatPath1] = useState(DEFAULT_DAT);
@@ -125,6 +185,9 @@ export default function App() {
   const [record2, setRecord2] = useState(0);          // Data2 当前记录（0 基，global_SizeCnt2）
   const [syncMove, setSyncMove] = useState(true);     // 复刻 IDC_CHECK_SYNC_MOVE
   const [viewWave, setViewWave] = useState(VIEW_WAVES['IR1 (A1)']);
+  // 打开即并行预载全部 13 个原始波段（Img1..Img6 + Img16..Img22），复刻 OLD「整个文件常驻内存」：
+  // 之后任意波段 / 任意帧翻动都只做内存切片（零网络、瞬时）。默认开；关闭则首次切波段仍需下载一次。
+  const [preloadAllWaves, setPreloadAllWaves] = useState(true);
   const [ir1Img, setIr1Img] = useState(null);         // IR1 画布图像（来自 Data1）
   const [ir2Img, setIr2Img] = useState(null);         // IR2 画布图像（来自 Data2）
   const [busy, setBusy] = useState(false);
@@ -175,6 +238,7 @@ export default function App() {
   const [country, setCountry] = useState(0);
   const [batchStats, setBatchStats] = useState(null); // Statistics 批量结果（Data1）
   const [batchStats2, setBatchStats2] = useState(null); // Statistics 批量结果（Data2）
+  const [statDiag, setStatDiag] = useState(null); // Statistics 批量分析诊断（请求/返回/有效/跳过），屏上直接可见
 
   // ---- P5 鼠标点（对应 OLD mouse_range_point + global_stop_mouse_range）----
   const [mousePos, setMousePos] = useState(null);            // {x,y} 图像像素（选区左上角）
@@ -209,24 +273,89 @@ export default function App() {
   // Data1 / Data2 各自独立：IR1 来自 datPath1+record1，IR2 来自 datPath2+record2；
   // 当前波段 viewWave 全局一致（复刻 MFC 同一通道同时看两文件）。
   // counts 用于在 handleOpen 里绕过 React 状态批处理导致的旧 closure（打开 Data2 时 recordCount2 尚未刷新）
-  const loadImages = useCallback(async (rec1, rec2, wave, counts = {}) => {
+  // paths 用于在 handleOpen 里传入刚打开的真实路径，避免 loadImages 闭包里的 datPath1/datPath2 仍是旧值
+  // （否则会出现「IR1 显示成 IR2 内容」：setDatPath1 已更新但 loadImages 仍用旧路径加载图像）。
+
+  // ---- 整通道预载缓存（网页「秒载 1000 张」核心）----
+  // 复刻 OLD 文件常驻内存 + 指针直取：把一个波段的全部 record 像素一次性取回浏览器常驻为
+  // Uint8Array，翻帧只做内存切片（零网络、瞬时）。对应主流图像序列方案（OHIF/Napari/视频帧播放器）。
+  // channelCache: key(datPath::waveName) -> { buf, width, height, count }
+  // channelInFlight: key -> Promise（去重，避免同一通道并发重复下载）
+  const channelCacheRef = useRef(new Map());
+  const channelInFlightRef = useRef(new Map());
+  const CHANNEL_CACHE_LIMIT = 32; // 超出后按插入顺序淘汰最旧，防止多文件/多波段无限占用内存
+
+  const ensureChannel = useCallback(async (datPath, waveName) => {
+    const key = datPath + '::' + waveName;
+    const cache = channelCacheRef.current;
+    if (cache.has(key)) return cache.get(key);
+    if (channelInFlightRef.current.has(key)) return channelInFlightRef.current.get(key);
+    const p = getChannelFrames({ datPath, wave: waveName })
+      .then((r) => {
+        const entry = { buf: r.data, width: r.width, height: r.height, count: r.recordCount };
+        cache.set(key, entry);
+        if (cache.size > CHANNEL_CACHE_LIMIT) {
+          const oldest = cache.keys().next().value; // Map 保留插入顺序
+          cache.delete(oldest);
+        }
+        channelInFlightRef.current.delete(key);
+        return entry;
+      })
+      .catch((e) => {
+        channelInFlightRef.current.delete(key);
+        throw e;
+      });
+    channelInFlightRef.current.set(key, p);
+    return p;
+  }, []);
+
+  // 打开文件后并行预载全部 13 个原始波段（Img1..Img6 + Img16..Img22），复刻 OLD「整个文件常驻内存」：
+  // 之后任意波段 / 任意帧翻动都只做内存切片（零网络、瞬时）。中间计算波段(Img7..Img15)服务端无整通道存储，跳过。
+  // 去重由 ensureChannel 的 channelInFlightRef 保证；fire-and-forget，不阻塞打开流程。
+  const preloadAllWavesFor = useCallback((datPath) => {
+    if (!datPath) return;
+    const names = Object.values(VIEW_WAVES).filter((w) => w.mode === 'raw').map((w) => w.name);
+    logInfo('预载全部原始波段', { datPath, count: names.length });
+    const tasks = names.map((n) => ensureChannel(datPath, n));
+    Promise.allSettled(tasks).then((res) => {
+      const ok = res.filter((r) => r.status === 'fulfilled' && r.value).length;
+      logInfo('预载全部原始波段完成', { datPath, ok, total: names.length });
+      pushHistory(`预载 ${ok}/${names.length} 波段完成`);
+    });
+  }, [ensureChannel, logInfo, pushHistory]);
+
+  // 取一侧（Data1/Data2）当前 record 的显示像素：优先整通道切片；失败回退逐张 getImage
+  const loadSideChannel = useCallback(async (datPath, record, waveName) => {
+    try {
+      const ch = await ensureChannel(datPath, waveName);
+      if (ch && record >= 0 && record < ch.count) {
+        const n = ch.width * ch.height;
+        const gray = ch.buf.slice(record * n, record * n + n); // 复制该帧，避免渲染引用整缓冲
+        return { width: ch.width, height: ch.height, gray, record, wave: waveName };
+      }
+    } catch (e) {
+      logWarning?.('整通道预载失败，回退逐张取图', { datPath, waveName, message: e.message });
+    }
+    // 回退：兼容中间波段 / 不支持整通道预载的波段
+    try {
+      return await getImage({
+        datPath, record, wave: waveName, mode: 'raw', wtablePath, redOffset, grnOffset,
+      });
+    } catch (e2) {
+      return null;
+    }
+  }, [ensureChannel, wtablePath, redOffset, grnOffset, logWarning]);
+
+  const loadImages = useCallback(async (rec1, rec2, wave, counts = {}, paths = {}) => {
+    const d1 = paths.datPath1 ?? datPath1;
+    const d2 = paths.datPath2 ?? datPath2;
     const c1 = counts.count1 ?? recordCount1;
     const c2 = counts.count2 ?? recordCount2;
     startBusy('加载图像...');
     try {
       const [a, b] = await Promise.all([
-        c1 > 0
-          ? getImage({
-              datPath: datPath1, record: rec1, wave: wave.name, mode: wave.mode, wtablePath,
-              redOffset, grnOffset,
-            })
-          : Promise.resolve(null),
-        c2 > 0
-          ? getImage({
-              datPath: datPath2, record: rec2, wave: wave.name, mode: '2byte', wtablePath,
-              redOffset, grnOffset,
-            })
-          : Promise.resolve(null),
+        c1 > 0 ? loadSideChannel(d1, rec1, wave.name) : Promise.resolve(null),
+        c2 > 0 ? loadSideChannel(d2, rec2, wave.name) : Promise.resolve(null),
       ]);
       if (a) setIr1Img(a);
       if (b) setIr2Img(b);
@@ -242,7 +371,7 @@ export default function App() {
       // 预览小图取自 Data1
       if (c1 > 0) {
         try {
-          const sm = await getSmallImage({ datPath: datPath1, record: rec1 });
+          const sm = await getSmallImage({ datPath: d1, record: rec1 });
           setValidation(sm.validation || null);
         } catch (e) {
           setValidation(null);
@@ -253,7 +382,7 @@ export default function App() {
     } finally {
       stopBusy();
     }
-  }, [datPath1, datPath2, recordCount1, recordCount2, wtablePath, redOffset, grnOffset, pushHistory]);
+  }, [datPath1, datPath2, recordCount1, recordCount2, wtablePath, redOffset, grnOffset, loadSideChannel, pushHistory]);
 
   const handleOpen = useCallback(async (path, panelIndex, jumpTo) => {
     const p = path || (panelIndex === 2 ? datPath2 : datPath1);
@@ -305,13 +434,15 @@ export default function App() {
       const nextCount2 = panelIndex === 2
         ? s.record_count
         : (datPath2 === p ? s.record_count : recordCount2);
-      await loadImages(r1, r2, viewWave, { count1: nextCount1, count2: nextCount2 });
+      await loadImages(r1, r2, viewWave, { count1: nextCount1, count2: nextCount2 },
+        { datPath1: panelIndex === 1 ? p : datPath1, datPath2: panelIndex === 2 ? p : datPath2 });
+      if (preloadAllWaves) preloadAllWavesFor(p); // 打开即并行预载全部原始波段（不阻塞 UI）
     } catch (e) {
       logError(`openSession Data${panelIndex} failed`, { path: p, message: e.message });
       pushHistory(`打开失败: ${e.message}`);
       stopBusy();
     }
-  }, [datPath1, datPath2, record1, record2, syncMove, recordCount2, viewWave, loadImages, pushHistory, prependRecent]);
+  }, [datPath1, datPath2, record1, record2, syncMove, recordCount2, viewWave, loadImages, pushHistory, prependRecent, preloadAllWaves, preloadAllWavesFor]);
 
   // 上传并打开本地 .dat（拖拽到 IR1→Data1 / IR2→Data2，或点 Open 选文件）：复刻 OLD DropDlg 拖入即加载
   const handleOpenFile = useCallback(async (file, panelIndex = 1) => {
@@ -413,6 +544,7 @@ export default function App() {
       return;
     }
     startBusy(`Statistics ${start}/${step}/${times} ...`);
+    setStatDiag(null);
     try {
       const computeBatch = async (datPath, recordCount, label) => {
         const stepVal = step || 1;
@@ -423,6 +555,7 @@ export default function App() {
         logInfo(`Statistics ${label} request`, { datPath, zfilePath, start: startVal, step: stepVal, count: n, recordCount, available, kin, country });
         // 批量分析：一次 HTTP 请求让服务端并行计算 n 个 record（替代逐条发 200 次）
         const resp = await analyzeBatchByPath({ datPath, zfilePath, start: startVal, step: stepVal, count: n, kin, country });
+        const backendMs = resp.elapsed_ms ?? 0;
         const all = []; // 每条 {recordNo, s2, etc}，供 S2Chart 多记录 txt 列表
         const list = [];
         const rawResults = resp.results || [];
@@ -444,9 +577,11 @@ export default function App() {
           const errHint = errors.length ? `；样例错误：${errors.slice(0, 3).join(' / ')}` : '';
           logWarning(`Statistics ${label} no valid results`, { requested: n, returned: rawResults.length, skipped, errors: errors.slice(0, 5) });
           pushHistory(`Statistics ${label} 服务端未返回有效结果（请求 ${n} 枚，返回 ${rawResults.length} 条，有效 0 条${skipped ? `，跳过 ${skipped} 条` : ''}）${errHint}`);
-          return { avg: [], std: [], count: 0, all: [], firstS2: [] };
+          const diag = { label, requested: n, returned: rawResults.length, valid: 0, skipped, errors: errors.slice(0, 3), backendMs };
+          return { avg: [], std: [], count: 0, all: [], firstS2: [], diag };
         }
         pushHistory(`Statistics ${label} 批量分析 请求 ${n} 枚 / 返回 ${rawResults.length} 条 / 有效 ${list.length} 条 / 跳过 ${skipped} 条 完成`);
+        const diag = { label, requested: n, returned: rawResults.length, valid: list.length, skipped, errors: errors.slice(0, 3), backendMs };
         const len = list[0].length;
         const avg = [];
         const std = [];
@@ -459,7 +594,7 @@ export default function App() {
           avg.push(m);
           std.push(Math.sqrt(v / list.length));
         }
-        return { avg, std, count: list.length, all, firstS2: list[0] };
+        return { avg, std, count: list.length, all, firstS2: list[0], diag };
       };
 
       // 与 Make Graph 的 1/2 复选框一致：仅分析被勾选的文件，避免「只分析 IR1」时仍计算和显示 IR2 的 Result Details / 趋势
@@ -488,6 +623,9 @@ export default function App() {
       } else {
         pushHistory(`Statistics 完成：Data1=${b1 ? b1.count : 0} 枚` + (b2 ? ` / Data2=${b2.count} 枚` : ''));
       }
+      // 屏上诊断：把请求/返回/有效/跳过直接显示在 Statistics 按钮下方，方便定位 1044 不返回等问题
+      const diags = [b1?.diag, b2?.diag].filter(Boolean);
+      setStatDiag(diags.length ? diags : null);
     } catch (e) {
       pushHistory(`Statistics 失败: ${e.message}`);
     } finally {
@@ -818,16 +956,42 @@ export default function App() {
   };
 
   return (
-        <div className="main-window" onClick={() => { setActiveMenu(null); setCtxMenu(null); }}>
+        <div className="app-viewport" ref={viewportRef}>
+        <ZoomContext.Provider value={zoom}>
+        <div className="main-window" style={{ zoom }}
+          onClick={() => { setActiveMenu(null); setCtxMenu(null); }}>
         <TitleBar onResize={() => {}} />
         <TopMenuBar activeMenu={activeMenu} setActiveMenu={setActiveMenu} setActiveDialog={setActiveDialog} pushHistory={pushHistory} />
+        {/* 左侧区整体包裹：统一缩放 顶部按钮 + 图像 + databar（不影响右侧） */}
+        <div className="left-area" style={{ zoom: leftZoom }}>
         <ChannelTab channel={channel} setChannel={handleChannel} />
         <SubToolbarRow active={subActive} setActive={setSubActive} pushHistory={pushHistory} onSelect={handleWaveSelect} />
+        <label className="preload-all-waves" title="打开文件后并行预载全部 13 个原始波段，复刻 OLD 全文件常驻；关闭则首次切波段仍需下载一次">
+          <input type="checkbox" checked={preloadAllWaves} onChange={(e) => {
+            const v = e.target.checked;
+            setPreloadAllWaves(v);
+            // 中途开启时，对当前已打开的两个文件立即补预载
+            if (v) { preloadAllWavesFor(datPath1); preloadAllWavesFor(datPath2); }
+          }} />
+          打开即预载全部波段
+        </label>
 
-      {/* 左侧主画布：绝对定位 X0–613, Y88 起 */}
-      <div className="main-canvas">{renderMainCanvas()}</div>
+      {/* 左侧主画布：内层 .main-canvas 填满 .main-canvas-wrap，缩放由外层 .left-area 统一控制 */}
+      <div className="main-canvas-wrap">
+      <div className="main-canvas">
+        {renderMainCanvas()}
+      </div>
+        {/* 左侧区独立缩放手柄：拖拽整体放大/缩小（不影响右侧区） */}
+        <div
+          className="left-resize-handle"
+          title="拖拽缩放左侧区（拉大 / 缩小）"
+          style={{ left: BASE_LW * leftZoom, top: BASE_LH * leftZoom, transform: 'translate(-100%, -100%)' }}
+          onMouseDown={onLeftResizeHandleDown}
+        />
+      </div>
+      </div>
 
-      {/* 右侧区：绝对定位 X900, Y44, 宽900，高956；内部所有面板直接用 .rc 坐标(局部 left=rcX-613, top=rcY*1.337) */}
+      {/* 右侧区：绝对定位 X1100, Y44, 宽1300, 高1356；内部所有面板直接用 .rc 坐标(局部 left=rcX-613, top=rcY*1.337) */}
       <div className="right-area">
         {/* Mouse Point (rc 631,1) */}
         <RC id="mouse-point" className="rc-mouse-point" dl={22} dt={0}>
@@ -924,6 +1088,7 @@ export default function App() {
             times={mgTimes} setTimes={setMgTimes}
             total={Math.max(recordCount1 || 0, recordCount2 || 0) || null}
             cmp12={mgCmp12} setCmp12={setMgCmp12}
+            statDiag={statDiag}
           />
           <div className="mg-graph-wrap">
             <GraphPlot
@@ -997,6 +1162,15 @@ export default function App() {
             version={atbVer} setVersion={setAtbVer}
             list={atbList} selected={atbSel} setSelected={setAtbSel}
             radioMode={atbRadio} setRadioMode={setAtbRadio}
+            pushHistory={pushHistory}
+          />
+        </RC>
+        {/* Coordinate / Function Name File（rc 629,646）— 从底部状态栏移入右侧区，作为可拖拽 RC */}
+        <RC id="file-paths" className="rc-file-paths" dl={19} dt={864}>
+          <FilePathPanel
+            zfilePath={zfilePath}
+            setZfilePath={setZfilePath}
+            setActiveDialog={setActiveDialog}
             pushHistory={pushHistory}
           />
         </RC>
@@ -1119,6 +1293,11 @@ export default function App() {
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)}
           onAction={handleContextAction} />
       )}
-    </div>
+
+      {/* 右下角缩放手柄：拖拽改变全局 zoom，容器内所有控件等比放大/缩小 */}
+      <div className="resize-handle" title="拖拽缩放（拉大/缩小）" onMouseDown={onResizeHandleDown} />
+        </div>
+        </ZoomContext.Provider>
+      </div>
   );
 }
