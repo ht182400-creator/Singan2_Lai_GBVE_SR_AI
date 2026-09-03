@@ -1,6 +1,7 @@
 // M3/M4 HTTP API 客户端封装（对应 server/server.cpp，P0–P5 全部端点）。
 // 端点总览见 docs/11_模块功能同步方案_P0-P5.md 第 4 节。
 // 所有函数返回解析后的 JSON；失败抛 Error(message)。
+import { logModule } from './utils/debugLogger.js';
 
 async function postJson(url, body) {
   const r = await fetch(url, {
@@ -8,8 +9,20 @@ async function postJson(url, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  const text = await r.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    // 非 JSON 响应（如服务端崩溃/代理错误页）记录原文到调试日志，便于定位 'Unexpected token' 类问题
+    logModule('ERROR', 'API', `响应非 JSON（首 200 字符）: ${text.slice(0, 200)}`, { url, status: r.status });
+    throw new Error(`服务器返回非 JSON 响应: ${text.slice(0, 80)}`);
+  }
+  if (!r.ok) {
+    const msg = data && data.error ? data.error : `HTTP ${r.status}`;
+    logModule('ERROR', 'API', `HTTP 错误 ${r.status}: ${msg}`, { url });
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -90,10 +103,12 @@ export async function analyzeByPath({ datPath, zfilePath, record = 0, kin = 1, c
 
 // 批量分析（Statistics/Make Graph 用）：单文件多 record 一次请求，服务端并行计算
 // { datPath, zfilePath, start, step, count, kin, country } -> { count, record_count, results:[{record,s2,etc}] }
+// warm=true 时服务端仅填充预计算缓存、响应不含 results（省带宽，用于打开文件后的后台预热）
 export async function analyzeBatchByPath({ datPath, zfilePath, start = 0, step = 1,
-  count = 1, kin = 1, country = 0 }) {
+  count = 1, kin = 1, country = 0, warm = false }) {
   return postJson('/api/analyze-batch', {
     dat_path: datPath, zfile_path: zfilePath, start, step, count, kin, country,
+    warm: warm ? 1 : 0,
   });
 }
 
@@ -184,4 +199,39 @@ export async function saveConfig({ path, config }) {
 
 export async function loadConfig({ path }) {
   return postJson('/api/config/load', { path });
+}
+
+// ============ 日志查看器 ============
+
+// 读取后端 C++ 调试日志（singan2_debug.log）文本内容。
+// 返回 { exists:bool, size:int, content:string }，文件不存在时 exists=false。
+export async function getBackendLog() {
+  const r = await fetch('/api/debug-log');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// 将后端日志纯文本解析为结构化行：{ time, level, module, msg }。
+// 兼容两种格式：
+//   [ts] LEVEL [MODULE] msg   （dbg 输出，带级别与模块）
+//   [ts] msg                  （debug_log 输出，无级别/模块，按 LOG/- 处理）
+export function parseBackendLog(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const re = /^\[([^\]]+)\]\s+(?:(\w+)\s+\[([^\]]+)\]\s+)?(.*)$/;
+  const out = [];
+  for (const ln of lines) {
+    if (ln === '') continue;
+    const m = re.exec(ln);
+    if (m) {
+      out.push({
+        time: m[1],
+        level: m[2] || 'LOG',
+        module: m[2] ? (m[3] || '-') : '-',
+        msg: (m[4] || '').replace(/^\s+/, ''),
+      });
+    } else {
+      out.push({ time: '', level: 'LOG', module: '-', msg: ln });
+    }
+  }
+  return out;
 }

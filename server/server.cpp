@@ -3,6 +3,7 @@
 //
 // 端点总览（P0–P5 模块功能同步，详见 docs/11_模块功能同步方案_P0-P5.md）：
 //   GET  /health                    健康检查
+//   GET  /api/debug-log             读取 singan2_debug.log 文本（供前端日志查看器，按模块/级别彩色展示）
 //   -- P0 基础数据链路 --
 //   POST /api/session/open          {dat_path}                     -> {record_count, wave_count, waves[]}
 //   POST /api/image                 {dat_path,record,wave,mode,...}-> {width,height,encoding,min,max,data(base64)}
@@ -45,6 +46,8 @@
 #include <thread>
 #include <tuple>
 #include <vector>
+#include <atomic>
+#include <memory>
 
 #include "httplib.h"
 #include "singan2/algo.h"
@@ -399,6 +402,12 @@ static int name_to_tab(const std::string& name) {
     return 0;
 }
 
+// 判断波段名是否为文件块中直接存放的原始波段（Img7..Img15 为中间计算波段）。
+static bool is_raw_wave_name(const std::string& name) {
+    int tab = name_to_tab(name);
+    return tab < 6 || tab > 14;
+}
+
 // ---- Make Graph 专用：复刻 CreateGraph1 + ComputeSuppleResult ----
 // 对当前 twoimg[tab] 做二值化（阈值作用于 twoimg 截断到 8bit 后的值），复刻 NITIGraph
 static void niti_on_twoimg(ImageEngine& eng, int tab, int threshold) {
@@ -471,6 +480,41 @@ static bool make_graph_record(const std::string& dat_path, int record,
     return true;
 }
 
+// 单 record 快速路径：直接传入已提取的原始波段像素，避免 per-record 的
+// extract_mm1_side + build_onebyte_images(13 波段) + to_2byte(22 图) 全量开销。
+static bool make_graph_record_fast(const uint8_t* raw_wave,
+                                   const std::string& wtable_path,
+                                   const std::string& wave_name,
+                                   const std::string& niti_type, int grad_type, int gain,
+                                   int threshold, int color_point,
+                                   int area_x, int area_y, int area_w, int area_h,
+                                   bool use_black,
+                                   int& out_value, std::string& err) {
+    ImageEngine eng;
+    // 仅装入当前需要的单波段：oneimg 供 NiBlack，twoimg 供 Gra+Bin/Bin
+    std::vector<uint8_t> one(raw_wave, raw_wave + singan2::ONESIZE);
+    std::vector<uint16_t> two(one.begin(), one.end());
+    eng.oneimg[wave_name] = std::move(one);
+    eng.twoimg[wave_name] = std::move(two);
+    eng.tab_no = name_to_tab(wave_name);
+    eng.w_table = &get_wtable(wtable_path);
+    if (niti_type == "Gra+Bin") {
+        eng.gradient(grad_type, gain);
+        niti_on_twoimg(eng, eng.tab_no, threshold);
+    } else if (niti_type == "Bin") {
+        niti_on_twoimg(eng, eng.tab_no, threshold);
+    } else if (niti_type == "NiBlack") {
+        eng.niblack(threshold);
+    } else {
+        err = "未知的 niti_type: " + niti_type;
+        return false;
+    }
+    const auto& img = eng.twoimg_at(eng.tab_no);
+    auto [black, white] = count_black_white(img, area_x, area_y, area_w, area_h, color_point);
+    out_value = use_black ? black : white;
+    return true;
+}
+
 // ---- 分析：运行算法并序列化 ----
 static std::string run_and_serialize(const std::string& dat_path, int record,
                                      const std::string& zfile_path, int kin, int country) {
@@ -484,6 +528,189 @@ static std::string run_and_serialize(const std::string& dat_path, int record,
     body += "}";
     return body;
 }
+
+// ---- 预计算缓存：打开文件/首次分析即后台计算全部 record 的 S2/ETC ----
+// 复刻 OLD MFC「整文件常驻内存 + 指针直取」：一次算完常驻，之后任意 record 的
+// Statistics 直接命中缓存（秒回），避免上千 record 重复全量计算（Web Statistics 慢的根因之二）。
+// 主流方案：服务端懒加载 + 后台预热（类似 OHIF/Napari 的整序列预载），命中后零计算。
+
+// ---- 调试日志基础设施（必须在 PrecomputeCache 之前定义，供其记录带级别/模块的日志）----
+static std::mutex g_dbg_mutex;  // 调试日志全局锁
+// 当前线程 id 字符串（多线程死锁/竞态定位时区分不同 worker 线程）
+static std::string tid() {
+    std::ostringstream oss;
+    oss << std::this_thread::get_id();
+    return oss.str();
+}
+// 生成带毫秒的时间戳（格式：%Y-%m-%d %H:%M:%S.mmm），供 dbg/debug_log 复用，便于定位竞态时序。
+static std::string dbg_time() {
+    try {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+        std::tm tm_buf{};
+        localtime_s(&tm_buf, &t);
+        char buf[32] = {0};
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_buf);
+        char out_buf[48] = {0};
+        std::snprintf(out_buf, sizeof(out_buf), "%s.%03d", buf, (int)ms.count());
+        return std::string(out_buf);
+    } catch (...) {
+        return "";
+    }
+}
+// 带级别与模块的调试日志：level ∈ DEBUG/INFO/WARNING/ERROR，
+// module 标识来源（analyze-batch / precache / graph-make / session / upload 等）。
+static void dbg(const std::string& level, const std::string& module, const std::string& msg) {
+    try {
+        std::lock_guard<std::mutex> lk(g_dbg_mutex);
+        std::ofstream out("singan2_debug.log", std::ios::app);
+        if (!out) return;
+        out << "[" << dbg_time() << "] " << level << " [" << module << "] " << msg << "\n";
+        out.flush();
+    } catch (...) {
+        // 调试日志失败不影响主流程
+    }
+}
+
+namespace {
+
+struct PrecomputedRecord {
+    std::vector<int> s2;
+    std::vector<int> etc;
+    bool computed = false;
+};
+
+struct PrecomputeEntry {
+    std::recursive_mutex mu;  // 递归锁：消除同线程重复加锁抛 resource_deadlock 的隐患
+    int record_count = 0;
+    std::vector<PrecomputedRecord> recs;
+    bool warming = false;        // 后台预热线程是否已在跑（防止重复启动）
+    std::string dat_path, zfile_path;
+    int kin = 1, country = 0;
+};
+
+std::map<std::string, std::shared_ptr<PrecomputeEntry>>& pc_map() {
+    static std::map<std::string, std::shared_ptr<PrecomputeEntry>> m;
+    return m;
+}
+std::recursive_mutex& pc_map_mu() {
+    static std::recursive_mutex m;
+    return m;
+}
+// key 含 dat_path/zfile_path/kin/country：四者任一变化都会得到独立缓存（保证结果正确）
+std::string pc_key(const std::string& dat_path, const std::string& zfile_path, int kin, int country) {
+    return dat_path + "|" + zfile_path + "|" + std::to_string(kin) + "|" + std::to_string(country);
+}
+
+// 懒创建 entry（解析 record_count 一次），并初始化 recs 容量
+std::shared_ptr<PrecomputeEntry> pc_get_or_create(const std::string& dat_path,
+                                                  const std::string& zfile_path,
+                                                  int kin, int country, int record_count) {
+    std::string key = pc_key(dat_path, zfile_path, kin, country);
+    std::lock_guard<std::recursive_mutex> lk(pc_map_mu());
+    auto& m = pc_map();
+    auto it = m.find(key);
+    if (it != m.end()) return it->second;
+    auto e = std::make_shared<PrecomputeEntry>();
+    e->dat_path = dat_path;
+    e->zfile_path = zfile_path;
+    e->kin = kin;
+    e->country = country;
+    e->record_count = record_count;
+    e->recs.resize(record_count);
+    m[key] = e;
+    return e;
+}
+
+// 后台补全所有 record（跳过已算的），使后续任意 record 命中缓存
+void pc_warm_async(std::shared_ptr<PrecomputeEntry> e) {
+    {
+        std::lock_guard<std::recursive_mutex> lk(e->mu);
+        if (e->warming) {
+            dbg("DEBUG", "precache", "后台补全已在运行 dat=" + e->dat_path + " 跳过重复启动 thread=" + tid());
+            return;  // 已有预热线程在跑，避免重复启动
+        }
+        e->warming = true;
+    }
+    dbg("INFO", "precache", "启动后台补全 dat=" + e->dat_path
+        + " record_count=" + std::to_string(e->record_count) + " thread=" + tid());
+    auto tw0 = std::chrono::steady_clock::now();
+    std::thread([e, tw0]() {
+        const int rc = e->record_count;
+        int done = 0;
+        for (int r = 0; r < rc; ++r) {
+            {
+                std::lock_guard<std::recursive_mutex> lk(e->mu);
+                if (e->recs[r].computed) continue;  // 已算则跳过
+            }
+            std::vector<int> s2, etc;
+            try {
+                singan2::run_algorithm(e->dat_path, r, e->zfile_path, "" /*wtable 空=理论表*/,
+                                       e->kin, e->country, s2, etc);
+            } catch (const std::exception& ex) {
+                // 单 record 失败跳过，不阻断其余；记录以定位异常 record
+                dbg("WARNING", "precache", "后台补全 record=" + std::to_string(r)
+                    + " 异常=" + ex.what() + " thread=" + tid());
+                continue;
+            }
+            std::lock_guard<std::recursive_mutex> lk(e->mu);
+            e->recs[r].s2 = std::move(s2);
+            e->recs[r].etc = std::move(etc);
+            e->recs[r].computed = true;
+            done++;
+        }
+        auto tw1 = std::chrono::steady_clock::now();
+        long long wms = std::chrono::duration_cast<std::chrono::milliseconds>(tw1 - tw0).count();
+        std::lock_guard<std::recursive_mutex> lk(e->mu);
+        e->warming = false;
+        dbg("INFO", "precache", "后台补全完成 dat=" + e->dat_path
+            + " 新算=" + std::to_string(done) + " 总record=" + std::to_string(rc)
+            + " 耗时=" + std::to_string(wms) + "ms");
+    }).detach();
+}
+
+// 取单 record：命中缓存直接返回（hit=true）；未命中则同步计算并写缓存，同时触发后台补全其余
+void pc_get_or_compute(const std::string& dat_path, const std::string& zfile_path,
+                       int kin, int country, int record_count, int rec,
+                       std::vector<int>& s2, std::vector<int>& etc, bool& hit) {
+    auto e = pc_get_or_create(dat_path, zfile_path, kin, country, record_count);
+    {
+        std::lock_guard<std::recursive_mutex> lk(e->mu);
+        if (rec >= 0 && rec < (int)e->recs.size() && e->recs[rec].computed) {
+            s2 = e->recs[rec].s2;
+            etc = e->recs[rec].etc;
+            hit = true;
+            dbg("DEBUG", "precache", "命中缓存 rec=" + std::to_string(rec) + " thread=" + tid());
+            return;
+        }
+    }
+    hit = false;
+    dbg("DEBUG", "precache", "未命中 rec=" + std::to_string(rec) + " thread=" + tid() + " 开始 run_algorithm");
+    auto t0 = std::chrono::steady_clock::now();
+    try {
+        // 未命中：同步计算（失败抛异常，由调用方记入 errs）；WTable 已在 core 内静态缓存
+        singan2::run_algorithm(dat_path, rec, zfile_path, "" /*wtable 空=理论表*/,
+                               kin, country, s2, etc);
+    } catch (const std::exception& ex) {
+        dbg("ERROR", "precache", "run_algorithm 异常 rec=" + std::to_string(rec)
+            + " thread=" + tid() + " err=" + ex.what());
+        throw;  // 交由 analyze-batch worker 记入 errs
+    }
+    auto t1 = std::chrono::steady_clock::now();
+    long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+    std::lock_guard<std::recursive_mutex> lk(e->mu);
+    if (rec >= 0 && rec < (int)e->recs.size()) {
+        e->recs[rec].s2 = s2;
+        e->recs[rec].etc = etc;
+        e->recs[rec].computed = true;
+    }
+    dbg("DEBUG", "precache", "已计算 rec=" + std::to_string(rec)
+        + " 耗时=" + std::to_string(ms) + "ms thread=" + tid());
+    pc_warm_async(e);  // 首次出现该 entry 即启动后台补全（首轮若已全算则线程立即退出）
+}
+
+}  // namespace
 
 static int form_int(const httplib::MultipartFormData& form, const std::string& key, int def) {
     if (!form.has_field(key)) return def;
@@ -521,18 +748,13 @@ static void send_ok(httplib::Response& res, const std::string& body) {
 
 // 调试日志：落盘到 CWD 下的 singan2_debug.log，便于开发跟踪（如 Statistics IR2 返回空时定位路径/后端问题）。
 // 带时间戳，文件锁保证多线程安全；任意异常静默忽略，不影响主流程。
-static std::mutex g_dbg_mutex;
+// （g_dbg_mutex 已提前到 PrecomputeCache 之前定义，供 dbg/tid 复用）
 static void debug_log(const std::string& msg) {
     try {
         std::lock_guard<std::mutex> lk(g_dbg_mutex);
         std::ofstream out("singan2_debug.log", std::ios::app);
         if (!out) return;
-        std::time_t t = std::time(nullptr);
-        char buf[32] = {0};
-        std::tm tm_buf{};
-        localtime_s(&tm_buf, &t);
-        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_buf);
-        out << "[" << buf << "] " << msg << "\n";
+        out << "[" << dbg_time() << "] " << msg << "\n";
         out.flush();
     } catch (...) {
         // 调试日志失败不影响主流程
@@ -562,6 +784,45 @@ int main(int argc, char** argv) {
 
     svr.Get("/health", [](const httplib::Request&, httplib::Response& res) {
         send_ok(res, "{\"status\":\"ok\"}");
+    });
+
+    // 读取后端 C++ 调试日志（singan2_debug.log），供前端日志查看器预览。
+    // 返回 { exists:bool, size:int, content:string(转义后) }，文件不存在时 exists=false。
+    svr.Get("/api/debug-log", [](const httplib::Request&, httplib::Response& res) {
+        set_cors(res);
+        try {
+            const std::string path = "singan2_debug.log";
+            if (!std::filesystem::exists(path)) {
+                res.set_content("{\"exists\":false,\"size\":0,\"content\":\"\"}", kJsonType);
+                return;
+            }
+            std::ifstream in(path, std::ios::in | std::ios::binary);
+            if (!in) {
+                res.set_content("{\"exists\":false,\"size\":0,\"content\":\"\"}", kJsonType);
+                return;
+            }
+            std::ostringstream ss;
+            ss << in.rdbuf();
+            const std::string content = ss.str();
+            // 转义 JSON 特殊字符，避免换行/引号破坏响应结构
+            std::string safe;
+            safe.reserve(content.size() + 16);
+            for (char c : content) {
+                switch (c) {
+                    case '"': safe += "\\\""; break;
+                    case '\\': safe += "\\\\"; break;
+                    case '\n': safe += "\\n"; break;
+                    case '\r': safe += "\\r"; break;
+                    case '\t': safe += "\\t"; break;
+                    default: safe += c;
+                }
+            }
+            std::ostringstream body;
+            body << "{\"exists\":true,\"size\":" << content.size() << ",\"content\":\"" << safe << "\"}";
+            res.set_content(body.str(), kJsonType);
+        } catch (const std::exception& ex) {
+            send_err(res, 500, std::string("read debug log failed: ") + ex.what());
+        }
     });
 
     // ============ P0 基础数据链路 ============
@@ -778,6 +1039,7 @@ int main(int argc, char** argv) {
         if (step < 1) step = 1;
         int count = json_get_int(req.body, "count", 1);
         if (count < 1) count = 1;
+        bool warm = json_get_bool(req.body, "warm", false);  // true=仅预热缓存，响应不含 results（省带宽）
         if (dat_path.empty() || zfile_path.empty()) {
             debug_log("[analyze-batch] 400 dat_path=" + dat_path + " zfile_path=" + zfile_path + " reason=必填项为空");
             send_err(res, 400, "dat_path 与 zfile_path 均必填");
@@ -797,17 +1059,35 @@ int main(int argc, char** argv) {
             std::vector<std::vector<int>> s2s(n), etcs(n);
             std::vector<std::string> errs(n);
 
+            // 后台预热(warm)只填充缓存、不返回 results，应主动让出 CPU 给前台
+            // 交互(graph-make / Statistics)，故限制为较低线程数；前台请求(warm=false)
+            // 用满核数以保证 Statistics 命中缓存后秒回。
             int nthreads = (int)std::thread::hardware_concurrency();
             if (nthreads < 1) nthreads = 1;
+            if (warm) {
+                int warm_threads = (nthreads + 1) / 3;  // 约 1/3 核，避免拖慢前台
+                if (warm_threads < 2) warm_threads = 2;
+                if (warm_threads > 6) warm_threads = 6;
+                nthreads = warm_threads;
+            }
             if (nthreads > n) nthreads = n;
+            dbg("INFO", "analyze-batch", "进入 dat=" + dat_path + " zfile=" + zfile_path
+                + " start=" + std::to_string(start) + " step=" + std::to_string(step)
+                + " count=" + std::to_string(count) + " warm=" + (warm ? "1" : "0")
+                + " record_count=" + std::to_string(record_count) + " 返回n=" + std::to_string(n)
+                + " 线程数=" + std::to_string(nthreads));
             auto worker = [&](int lo, int hi) {
                 for (int i = lo; i < hi; i++) {
                     int rec = std::max(0, std::min(record_count - 1, startVal + i * step));
+                    bool hit = false;
                     try {
-                        singan2::run_algorithm(dat_path, rec, zfile_path, "" /*wtable 空=理论表*/,
-                                              kin, country, s2s[i], etcs[i]);
+                        // 优先命中预计算缓存（秒回）；未命中则同步算并触发后台补全其余 record
+                        pc_get_or_compute(dat_path, zfile_path, kin, country, record_count, rec,
+                                          s2s[i], etcs[i], hit);
                     } catch (const std::exception& e) {
                         errs[i] = e.what();
+                        dbg("ERROR", "analyze-batch", "rec=" + std::to_string(rec)
+                            + " 异常=" + e.what() + " thread=" + tid());
                     }
                 }
             };
@@ -832,7 +1112,7 @@ int main(int argc, char** argv) {
                     if (e.empty()) valid++;
                     else { skip++; if (err_samples.size() < 3) err_samples.push_back(e); }
                 }
-                std::string dbg = "[analyze-batch] 请求 dat_path=" + dat_path
+                std::string dbg_msg = "[analyze-batch] 请求 dat_path=" + dat_path
                                 + " zfile_path=" + zfile_path
                                 + " start=" + std::to_string(start)
                                 + " step=" + std::to_string(step)
@@ -843,32 +1123,41 @@ int main(int argc, char** argv) {
                                 + " 有效=" + std::to_string(valid)
                                 + " 跳过=" + std::to_string(skip);
                 if (!err_samples.empty()) {
-                    dbg += " 样例错误=";
+                    dbg_msg += " 样例错误=";
                     for (size_t i = 0; i < err_samples.size(); ++i) {
-                        if (i) dbg += " | ";
-                        dbg += err_samples[i];
+                        if (i) dbg_msg += " | ";
+                        dbg_msg += err_samples[i];
                     }
                 }
-                debug_log(dbg);
+                debug_log(dbg_msg);
+                dbg(skip > 0 ? "WARNING" : "INFO", "analyze-batch", dbg_msg);
             }
 
             auto t1 = std::chrono::steady_clock::now();
             long long elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-            std::string body = "{\"count\":" + std::to_string(n)
-                             + ",\"record_count\":" + std::to_string(record_count)
-                             + ",\"elapsed_ms\":" + std::to_string(elapsed_ms) + ",\"results\":[";
-            for (int i = 0; i < n; i++) {
-                if (i) body += ",";
-                int rec = std::max(0, std::min(record_count - 1, startVal + i * step));
-                if (!errs[i].empty()) {
-                    body += "{\"record\":" + std::to_string(rec) + ",\"error\":" + json_escape(errs[i]) + "}";
-                } else {
-                    body += "{\"record\":" + std::to_string(rec)
-                         + ",\"s2\":" + to_json_array(s2s[i])
-                         + ",\"etc\":" + to_json_array(etcs[i]) + "}";
+            std::string body;
+            if (warm) {
+                // 仅预热：响应不含 results（避免上千 record 的大 JSON 回传，省带宽）
+                body = "{\"warmed\":" + std::to_string(n)
+                     + ",\"record_count\":" + std::to_string(record_count)
+                     + ",\"elapsed_ms\":" + std::to_string(elapsed_ms) + "}";
+            } else {
+                body = "{\"count\":" + std::to_string(n)
+                     + ",\"record_count\":" + std::to_string(record_count)
+                     + ",\"elapsed_ms\":" + std::to_string(elapsed_ms) + ",\"results\":[";
+                for (int i = 0; i < n; i++) {
+                    if (i) body += ",";
+                    int rec = std::max(0, std::min(record_count - 1, startVal + i * step));
+                    if (!errs[i].empty()) {
+                        body += "{\"record\":" + std::to_string(rec) + ",\"error\":" + json_escape(errs[i]) + "}";
+                    } else {
+                        body += "{\"record\":" + std::to_string(rec)
+                             + ",\"s2\":" + to_json_array(s2s[i])
+                             + ",\"etc\":" + to_json_array(etcs[i]) + "}";
+                    }
                 }
+                body += "]}";
             }
-            body += "]}";
             send_ok(res, body);
         } catch (const std::exception& e) {
             send_err(res, 500, e.what());
@@ -1119,19 +1408,44 @@ int main(int argc, char** argv) {
         std::vector<int>  values(m, 0);
         std::vector<char> ok(m, 0);
 
-        // 并行化：每个 record 的计算相互独立（make_graph_record 内部持有局部 ImageEngine，
-        // 文件读取走带锁的 LRU 缓存），各线程只写自己的下标，无数据竞争。
+        // 并行化：原始波段走单波次全 record 提取（一次 memcpy 大局，避免 per-record 的
+        // extract_mm1_side + build_onebyte_images 全 13 波段开销）；中间波段保持原逐 record 路径。
         int nthreads = (int)std::thread::hardware_concurrency();
         if (nthreads < 1) nthreads = 1;
         if (nthreads > m) nthreads = m;
+        bool use_fast_path = is_raw_wave_name(wave_name);
+        std::vector<uint8_t> flat;
+        if (use_fast_path) {
+            flat = singan2::extract_wave_all(dat_path, wave_name);
+            if (flat.empty()) {
+                send_err(res, 500, "批量提取波段失败: " + wave_name);
+                return;
+            }
+        }
+        auto t0 = std::chrono::steady_clock::now();
+        dbg("INFO", "graph-make", "进入 dat=" + dat_path + " wave=" + wave_name + " max_records=" + std::to_string(max_records)
+            + " start=" + std::to_string(start_record) + " step=" + std::to_string(step) + " record_count=" + std::to_string(record_count)
+            + " 线程数=" + std::to_string(nthreads) + " fast_path=" + (use_fast_path ? "1" : "0"));
         auto worker = [&](int lo, int hi) {
             for (int i = lo; i < hi; i++) {
                 std::string err;
                 int v = 0;
-                if (make_graph_record(dat_path, recs[i], wtable_path, wave_name, niti_type,
-                                      grad_type, gain, threshold, color_point,
-                                      area_x, area_y, area_w, area_h, use_black, v, err)) {
+                bool ok_i = false;
+                if (use_fast_path) {
+                    const uint8_t* ptr = flat.data() + static_cast<size_t>(recs[i]) * singan2::ONESIZE;
+                    ok_i = make_graph_record_fast(ptr, wtable_path, wave_name, niti_type,
+                                                  grad_type, gain, threshold, color_point,
+                                                  area_x, area_y, area_w, area_h, use_black, v, err);
+                } else {
+                    ok_i = make_graph_record(dat_path, recs[i], wtable_path, wave_name, niti_type,
+                                             grad_type, gain, threshold, color_point,
+                                             area_x, area_y, area_w, area_h, use_black, v, err);
+                }
+                if (ok_i) {
                     values[i] = v; ok[i] = 1;
+                } else {
+                    dbg("WARNING", "graph-make", "record=" + std::to_string(recs[i])
+                        + " 失败=" + err + " thread=" + tid());
                 }
             }
         };
@@ -1148,6 +1462,10 @@ int main(int argc, char** argv) {
             }
             for (auto& th : pool) th.join();
         }
+        auto t1 = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        dbg("INFO", "graph-make", "计算耗时 elapsed_ms=" + std::to_string(elapsed)
+            + " records=" + std::to_string(m) + " ms/record=" + std::to_string(elapsed / std::max(1, m)));
 
         // 组装 rows（失败记录跳过，record 号保持原值，与旧逻辑一致）
         std::string rows_json = "[";
@@ -1168,6 +1486,7 @@ int main(int argc, char** argv) {
         body += ",\"black\":" + std::string(use_black ? "true" : "false");
         body += ",\"rows\":" + rows_json;
         body += "}";
+        dbg("INFO", "graph-make", "完成 dat=" + dat_path + " wave=" + wave_name + " 返回行数=" + std::to_string(m));
         send_ok(res, body);
     });
 

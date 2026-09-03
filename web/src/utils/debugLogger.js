@@ -18,11 +18,13 @@ const entries = [];
  * @param {string} msg - 日志正文。
  * @param {*} [data] - 可选附加数据（会被 JSON 序列化）。
  */
-export function log(level, msg, data) {
+// 内部写日志：level 级别、module 模块标识、msg 正文、data 可选附加数据
+function logCore(level, module, msg, data) {
   try {
     const entry = {
       time: new Date().toISOString(),
       level: String(level).toUpperCase(),
+      module: String(module).toUpperCase(),
       msg: String(msg),
       data: data !== undefined ? JSON.stringify(data) : undefined,
     };
@@ -31,6 +33,15 @@ export function log(level, msg, data) {
   } catch (e) {
     // 日志器自身异常不能影响主流程
   }
+}
+
+// 记录一条带模块的日志（operation history / 关键操作应走此函数以区分模块）
+export function logModule(level, module, msg, data) {
+  logCore(level, module, msg, data);
+}
+
+export function log(level, msg, data) {
+  logCore(level, 'MISC', msg, data);
 }
 
 /** 记录 DEBUG 级别日志。 */
@@ -63,7 +74,7 @@ export function clearLog() {
 export function exportDebugLog() {
   try {
     const lines = entries.map((e) => {
-      const base = `${e.time} [${e.level}] ${e.msg}`;
+      const base = `${e.time} [${e.level}] [${e.module || 'MISC'}] ${e.msg}`;
       return e.data ? `${base} ${e.data}` : base;
     });
     const filename = `singan2_debug_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${new Date().toISOString().slice(11, 19).replace(/:/g, '')}.log`;

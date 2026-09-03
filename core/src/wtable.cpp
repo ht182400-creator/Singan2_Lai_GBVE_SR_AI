@@ -30,16 +30,21 @@ WTable load_w_table(const std::string& path) {
 }
 
 WTable gen_w_table() {
-    WTable wt;
-    wt.table.assign(W_TABLE_SIZE, 0);  // table[0] = 0
-    for (int i = 1; i < W_TABLE_SIZE; i++) {
-        double v = 65536.0 / i;
-        int iv = static_cast<int>(v);  // 截断(与 numpy astype(uint16) 行为一致)
-        if (iv > 65535) iv = 65535;
-        if (iv < 0) iv = 0;
-        wt.table[i] = static_cast<uint16_t>(iv);
-    }
-    return wt;
+    // 理论表只与 W_TABLE_SIZE 有关，每个 record 重新生成在批量分析时浪费显著。
+    // 静态缓存：首次生成后常驻内存，多线程共享只读，避免数千次重复除法/截断。
+    static const WTable cached = [] {
+        WTable wt;
+        wt.table.assign(W_TABLE_SIZE, 0);  // table[0] = 0
+        for (int i = 1; i < W_TABLE_SIZE; i++) {
+            double v = 65536.0 / i;
+            int iv = static_cast<int>(v);  // 截断(与 numpy astype(uint16) 行为一致)
+            if (iv > 65535) iv = 65535;
+            if (iv < 0) iv = 0;
+            wt.table[i] = static_cast<uint16_t>(iv);
+        }
+        return wt;
+    }();
+    return cached;
 }
 
 }  // namespace singan2

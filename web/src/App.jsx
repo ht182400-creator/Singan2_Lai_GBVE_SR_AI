@@ -25,9 +25,10 @@ import FilePathPanel from './components/FilePathPanel.jsx';
 import { arrayToText, buildResultRows, s2ToTextList, normalizeS2, normalizeEtc, S2_FUNC_NAMES, shouldAnalyzeData2 } from './utils/analysis.js';
 import { buildGraphStats } from './utils/graphStats.js';
 import { downloadTextFile } from './utils/file.js';
-import { logInfo, logDebug, logError, logWarning, exportDebugLog } from './utils/debugLogger.js';
+import { logInfo, logDebug, logError, logWarning, logModule, exportDebugLog, getLog } from './utils/debugLogger.js';
 
 import DialogModal from './components/DialogModal.jsx';
+import LogViewer from './components/LogViewer.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
 import GraphResultPanel from './components/GraphResultPanel.jsx';
 import AtbPanel from './components/AtbPanel.jsx';
@@ -39,7 +40,7 @@ import GraphViewOverlay from './components/GraphViewOverlay.jsx';
 
 import {
   openSession, getImage, analyzeByPath, analyzeBatchByPath, runImageOps, makeGraph, getSmallImage,
-  getChannelFrames, parseZfile, uploadDat,
+  getChannelFrames, parseZfile, uploadDat, getBackendLog, parseBackendLog,
 } from './api.js';
 
 // ---------------------------------------------------------------------------
@@ -90,6 +91,11 @@ const STATISTICS_MAX_RECORDS = 200000;
 export default function App() {
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeDialog, setActiveDialog] = useState(null);
+  // 日志查看器状态：logViewer=null|'ui'|'backend'；logLines 为已解析日志行
+  const [logViewer, setLogViewer] = useState(null);
+  const [logLines, setLogLines] = useState([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState('');
   const [channel, setChannel] = useState(0);
   const [subActive, setSubActive] = useState('IR1');
   const [history, setHistory] = useState(['Ready']);
@@ -265,8 +271,12 @@ export default function App() {
   // Image Processing 参数（供 Make Graph 复刻 OLD CreateGraph1 的 gradient/niti 管线）
   const [ipParams, setIpParams] = useState({ gradType: 0, gain: 1, nitiType: 'Gra+Bin', threshold: 90, colorPoint: 150 });
 
-  const pushHistory = useCallback((msg) => {
+  // operation history 同时写入调试日志（分模块/级别），便于复现 Statistics/Make Graph 等问题
+  const pushHistory = useCallback((msg, opts = {}) => {
+    const level = opts.level || 'INFO';
+    const module = opts.module || 'UI';
     setHistory((h) => [`${msg} @ ${new Date().toLocaleTimeString()}`, ...h].slice(0, 50));
+    logModule(level, module, msg, opts.data);
   }, []);
 
   // ===== P0：打开数据 + 加载波段图像 =====
@@ -320,9 +330,37 @@ export default function App() {
     Promise.allSettled(tasks).then((res) => {
       const ok = res.filter((r) => r.status === 'fulfilled' && r.value).length;
       logInfo('预载全部原始波段完成', { datPath, ok, total: names.length });
-      pushHistory(`预载 ${ok}/${names.length} 波段完成`);
+      pushHistory(`预载 ${ok}/${names.length} 波段完成`, { module: 'Prewarm' });
     });
   }, [ensureChannel, logInfo, pushHistory]);
+
+  // 打开文件 / 设坐标后，后台预热全部 record 的 S2/ETC（warm 仅填充服务端缓存、不回传 results）。
+  // 使随后的 Statistics 命中预计算缓存、秒级返回；复刻 OLD「整文件常驻内存」体验（Statistics 慢的根因之二）。
+  const warmedRef = useRef(new Set());
+  const prewarmAnalysis = useCallback(async (datPath, zfile, kin, country, recordCount) => {
+    if (!datPath || !zfile || !recordCount) return;
+    const key = `${datPath}|${zfile}|${kin}|${country}`;
+    if (warmedRef.current.has(key)) return;  // 已预热过则跳过（去重）
+    warmedRef.current.add(key);
+    logInfo('后台预热分析缓存', { datPath, recordCount });
+    try {
+      // count=全部 record；warm 模式服务端只填充缓存、响应不含 results（省带宽）
+      await analyzeBatchByPath({ datPath, zfilePath: zfile, start: 0, step: 1, count: recordCount, kin, country, warm: true });
+      logInfo('分析缓存预热完成', { datPath, recordCount });
+    } catch (e) {
+      warmedRef.current.delete(key);  // 预热失败（如坐标尚未就绪）→ 允许后续重试
+      logWarning('分析缓存预热失败（下次重试）', { message: e.message });
+    }
+  }, [analyzeBatchByPath, logInfo, logWarning]);
+
+  // 打开文件或切换坐标/通道参数后，对 Data1/Data2 各触发一次后台预热（fire-and-forget，不阻塞 UI）
+  useEffect(() => {
+    if (!zfilePath) return;
+    if (datPath1) prewarmAnalysis(datPath1, zfilePath, kin, country, recordCount1);
+    if (datPath2 && recordCount2 > 0 && datPath1 !== datPath2) {
+      prewarmAnalysis(datPath2, zfilePath, kin, country, recordCount2);
+    }
+  }, [zfilePath, datPath1, datPath2, recordCount1, recordCount2, kin, country, prewarmAnalysis]);
 
   // 取一侧（Data1/Data2）当前 record 的显示像素：优先整通道切片；失败回退逐张 getImage
   const loadSideChannel = useCallback(async (datPath, record, waveName) => {
@@ -378,7 +416,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      pushHistory(`图像加载失败: ${e.message}`);
+      pushHistory(`图像加载失败: ${e.message}`, { level: 'ERROR', module: 'Image' });
     } finally {
       stopBusy();
     }
@@ -423,7 +461,7 @@ export default function App() {
       }
       setS2(null);          // 清空分析缓存，Validation 面板不再显示上一份图结果
       setEtc(null);
-      pushHistory(`打开 Data${panelIndex} ${s.record_count} 枚（13 波段/枚）`);
+      pushHistory(`打开 Data${panelIndex} ${s.record_count} 枚（13 波段/枚）`, { module: 'File' });
       stopBusy();
       const r1 = panelIndex === 1 ? target : record1;
       const r2 = panelIndex === 2
@@ -439,7 +477,7 @@ export default function App() {
       if (preloadAllWaves) preloadAllWavesFor(p); // 打开即并行预载全部原始波段（不阻塞 UI）
     } catch (e) {
       logError(`openSession Data${panelIndex} failed`, { path: p, message: e.message });
-      pushHistory(`打开失败: ${e.message}`);
+      pushHistory(`打开失败: ${e.message}`, { level: 'ERROR', module: 'File' });
       stopBusy();
     }
   }, [datPath1, datPath2, record1, record2, syncMove, recordCount2, viewWave, loadImages, pushHistory, prependRecent, preloadAllWaves, preloadAllWavesFor]);
@@ -452,7 +490,7 @@ export default function App() {
       pushHistory(`上传 ${up.name} → Data${panelIndex}`);
       await handleOpen(up.path, panelIndex, null);
     } catch (e) {
-      pushHistory(`打开失败: ${e.message}`);
+      pushHistory(`打开失败: ${e.message}`, { level: 'ERROR', module: 'Upload' });
       stopBusy();
     }
   }, [handleOpen, pushHistory]);
@@ -580,7 +618,7 @@ export default function App() {
           const diag = { label, requested: n, returned: rawResults.length, valid: 0, skipped, errors: errors.slice(0, 3), backendMs };
           return { avg: [], std: [], count: 0, all: [], firstS2: [], diag };
         }
-        pushHistory(`Statistics ${label} 批量分析 请求 ${n} 枚 / 返回 ${rawResults.length} 条 / 有效 ${list.length} 条 / 跳过 ${skipped} 条 完成`);
+        pushHistory(`Statistics ${label} 批量分析 请求 ${n} 枚 / 返回 ${rawResults.length} 条 / 有效 ${list.length} 条 / 跳过 ${skipped} 条 完成`, { module: 'Statistics' });
         const diag = { label, requested: n, returned: rawResults.length, valid: list.length, skipped, errors: errors.slice(0, 3), backendMs };
         const len = list[0].length;
         const avg = [];
@@ -627,7 +665,7 @@ export default function App() {
       const diags = [b1?.diag, b2?.diag].filter(Boolean);
       setStatDiag(diags.length ? diags : null);
     } catch (e) {
-      pushHistory(`Statistics 失败: ${e.message}`);
+      pushHistory(`Statistics 失败: ${e.message}`, { level: 'ERROR', module: 'Statistics', data: { message: e.message } });
     } finally {
       stopBusy();
     }
@@ -700,10 +738,10 @@ export default function App() {
         file2_path: datPath2,
       };
       setGraphData(merged);
-      pushHistory(`Make Graph: IR1=${merged.rows.length} IR2=${merged.rows2 ? merged.rows2.length : 0} record 像素统计（Start=${mgStart} Step=${mgStep} Times=${mgTimes} TH=${ipParams.threshold}）`);
+      pushHistory(`Make Graph: IR1=${merged.rows.length} IR2=${merged.rows2 ? merged.rows2.length : 0} record 像素统计（Start=${mgStart} Step=${mgStep} Times=${mgTimes} TH=${ipParams.threshold}）`, { module: 'MakeGraph' });
     } catch (e) {
       logError('Make Graph error', { message: e.message, stack: e.stack });
-      pushHistory(`Make Graph 失败: ${e.message}`);
+      pushHistory(`Make Graph 失败: ${e.message}`, { level: 'ERROR', module: 'MakeGraph', data: { message: e.message } });
     } finally {
       stopBusy();
     }
@@ -739,6 +777,50 @@ export default function App() {
     if (k === 'Coordinate') setActiveDialog('coordinate');
     if (k === 'Finish') setActiveDialog('finish');
   };
+
+  /**
+   * 打开日志查看器：kind='ui' 直接读取前端内存日志；kind='backend' 调后端接口读取 singan2_debug.log。
+   * @param {'ui'|'backend'} kind
+   */
+  const openLogViewer = useCallback(async (kind) => {
+    pushHistory(kind === 'ui' ? 'Review UI Log' : 'Review Backend Log');
+    if (kind === 'ui') {
+      try {
+        const entries = getLog();
+        setLogLines(entries.map((e) => ({
+          time: e.time,
+          level: e.level || 'LOG',
+          module: e.module || 'MISC',
+          msg: e.data ? `${e.msg} ${e.data}` : e.msg,
+        })));
+        setLogError('');
+      } catch (ex) {
+        setLogLines([]);
+        setLogError('读取 UI 日志失败: ' + (ex && ex.message ? ex.message : String(ex)));
+      }
+      setLogLoading(false);
+      setLogViewer(kind);
+      return;
+    }
+    // 后端日志：异步拉取
+    setLogViewer(kind);
+    setLogLoading(true);
+    setLogError('');
+    try {
+      const data = await getBackendLog();
+      if (!data || !data.exists) {
+        setLogLines([]);
+        setLogError('后端日志文件不存在（singan2_debug.log）');
+      } else {
+        setLogLines(parseBackendLog(data.content));
+      }
+    } catch (ex) {
+      setLogLines([]);
+      setLogError('读取后端日志失败: ' + (ex && ex.message ? ex.message : String(ex)));
+    } finally {
+      setLogLoading(false);
+    }
+  }, [pushHistory]);
 
   /**
    * 主画布右键菜单动作分发（对应 OLD resource.rc IDR_POPMENU）。
@@ -1009,6 +1091,8 @@ export default function App() {
             <span>Operation History</span>
             <button className="btn btn-xs" onClick={() => setViewMode((m) => { const next = m === 'image' ? 'graph' : 'image'; pushHistory(`Switch View → ${next}`); return next; })}>Switch View</button>
             <button className="btn btn-xs" onClick={() => { const ok = exportDebugLog(); pushHistory(ok ? 'Debug Log 已导出' : 'Debug Log 导出失败'); }}>Debug Log</button>
+            <button className="btn btn-xs" onClick={() => openLogViewer('ui')}>UI Log</button>
+            <button className="btn btn-xs" onClick={() => openLogViewer('backend')}>Backend Log</button>
             <button className="btn btn-xs" onClick={() => { setHistory(['Ready']); pushHistory('Clear History'); }}>Clear</button>
           </div>
           <select className="op-history-list" size={3}>
@@ -1125,33 +1209,15 @@ export default function App() {
             onClearResult2={() => { setS2_2(null); setEtc_2(null); }}
           />
         </RC>
-        {/* S2 图表 + IR1/IR2 txt 列表（Graph 区右侧加宽至 150px）— 跨 record 函数值 */}
-        <RC id="s2chart" className={filesDiffer && mgInclude2 ? 'rc-s2chart dual' : 'rc-s2chart'} dl={715} dt={475}>
-          {filesDiffer && mgInclude2 ? (
-            <>
-              <S2Chart
-                title="IR1/Data1"
-                fileName="graph1.grp"
-                s2={chartData}
-                graphData={batchStats?.all ? { record_count: batchStats.all.length, rows: batchStats.all.map((r) => ({ record: r.recordNo - 1, s2: r.s2, etc: r.etc })) } : null}
-                fn={graphFn}
-              />
-              <S2Chart
-                title="IR2/Data2"
-                fileName="graph2.grp"
-                s2={chartData2}
-                graphData={batchStats2?.all ? { record_count: batchStats2.all.length, rows: batchStats2.all.map((r) => ({ record: r.recordNo - 1, s2: r.s2, etc: r.etc })) } : null}
-                fn={graphFn}
-              />
-            </>
-          ) : (
-            <S2Chart
-              fileName="graph1.grp"
-              s2={chartData}
-              graphData={batchStats?.all ? { record_count: batchStats.all.length, rows: batchStats.all.map((r) => ({ record: r.recordNo - 1, s2: r.s2, etc: r.etc })) } : null}
-              fn={graphFn}
-            />
-          )}
+        {/* S2 图表（IR1/IR2 同图叠加）+ 数值列表 — 跨 record 函数值 */}
+        <RC id="s2chart" className="rc-s2chart" dl={715} dt={475}>
+          <S2Chart
+            fileName="graph1.grp"
+            s2={chartData}
+            fn={graphFn}
+            graphData={batchStats?.all ? { record_count: batchStats.all.length, rows: batchStats.all.map((r) => ({ record: r.recordNo - 1, s2: r.s2, etc: r.etc })) } : null}
+            graphData2={(filesDiffer && mgInclude2 && batchStats2?.all) ? { record_count: batchStats2.all.length, rows: batchStats2.all.map((r) => ({ record: r.recordNo - 1, s2: r.s2, etc: r.etc })) } : null}
+          />
         </RC>
         {/* VTB 区 (rc 915,147) — resource.rc 真实存在，曾被误删 */}
         <RC id="vtb" className="rc-vtb" dl={362} dt={197}><VtbPanel pushHistory={pushHistory} /></RC>
@@ -1287,6 +1353,18 @@ export default function App() {
             <div style={{ fontSize: 11, color: '#555' }}>Apply 后重新加载当前波段。</div>
           </div>
         </DialogModal>
+      )}
+
+      {logViewer && (
+        <LogViewer
+          kind={logViewer}
+          title={logViewer === 'ui' ? 'UI 日志（前端）' : '后端日志（C++ singan2_debug.log）'}
+          lines={logLines}
+          loading={logLoading}
+          error={logError}
+          onClose={() => setLogViewer(null)}
+          onRefresh={logViewer === 'backend' ? () => openLogViewer('backend') : null}
+        />
       )}
 
       {ctxMenu && (

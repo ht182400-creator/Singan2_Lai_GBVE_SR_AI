@@ -295,19 +295,19 @@ body {
 .gp-svg { flex: 1; width: auto; height: 100%; background: #fff; }
 .gp-stats { width: 150px; padding: 2px 4px; font-family: monospace; border-left: 1px solid #ccc; white-space: nowrap; }
 /* S2Chart：加高以显示更多 record 值；Operation 在其上方，互不重叠 */
-.rc-s2chart { left: 555px; top: 1360px; width: 525px; height: 280px; z-index: 5; display: flex; flex-direction: column; }
-.rc-s2chart.dual { height: 525px; } /* 双文件时加高，让 IR1/IR2 各图表都有足够显示空间 */
+.rc-s2chart { left: 555px; top: 1360px; width: 525px; height: 320px; z-index: 5; display: flex; flex-direction: column; }
+.rc-s2chart.dual { height: 620px; } /* 双文件时加高，让 IR1/IR2 各图表都有足够显示空间 */
 .rc-s2chart .s2-chart { flex: 1; min-height: 0; }
 /* Notes / TH 行下移到 S2Chart 下方 */
-.rc-notes { left: 20px; top: 1890px; width: 520px; height: 50px; z-index: 4; }
-.rc-th-row { left: 555px; top: 1890px; width: 525px; height: 50px; z-index: 4; }
+.rc-notes { left: 20px; top: 1930px; width: 520px; height: 50px; z-index: 4; }
+.rc-th-row { left: 555px; top: 1930px; width: 525px; height: 50px; z-index: 4; }
 
 /* 原版真实存在但曾被误删的区域（resource.rc 证实） */
 .rc-vtb { left: 362px; top: 197px; width: 438px; height: 161px; }  /* rc 915,147 VTB 区 (右对齐至 800) */
 .rc-atb { left: 364px; top: 5px; width: 217px; }                /* rc 917,4 ATB 区 (181→217) */
 .rc-file-paths { left: 19px; top: 864px; width: 785px; height: 110px; z-index: 6; }  /* rc 629,646 Coordinate/Function Name File */
 .rc-op-history { left: 122px; top: 8px; width: 300px; z-index: 6; }  /* rc 714,6 Operation History，加宽以容纳 Table Function 下拉(原版 715,55 宽197) */
-.op-history-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
+.op-history-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px; font-size: 10px; margin-bottom: 2px; }
 .op-history-list { width: 100%; height: 54px; font-size: 10px; }
 .op-history-table { margin: 2px 0; }
 .op-history-table label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-weight: 600; white-space: nowrap; font-size: 11px; }
@@ -317,33 +317,78 @@ body {
   background: #1a1a1a; color: #c8c8c8; border: 1px solid #000;
   font-family: monospace; font-size: 9px; line-height: 1.2; resize: none;
 }
-/* S2 txt 列表：原版 S2 记录输出（IR1/IR2 同步显示） */
-.s2-txtlist {
-  width: 100%; flex: 1; min-height: 80px; box-sizing: border-box;
-  background: #ffffff; color: #222; border: 1px solid #888;
-  font-family: monospace; font-size: 9px; line-height: 1.15; resize: none;
-  margin-top: 2px; padding: 2px 3px; overflow: auto;
+/* S2 Chart：左侧趋势图 + 右侧数值列表 */
+.s2-chart {
+  display: flex; flex-direction: column;
+  height: 100%; min-height: 0;
+  position: relative; /* 用于 tooltip 定位参考 */
 }
-.s2-chart { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .s2-chart .s2-header {
   font-size: 11px; font-weight: 700; padding: 2px 4px;
   background: #d4d0c8; border-bottom: 1px solid #888;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 0 0 auto;
 }
-.s2-chart .s2-svg { width: 100%; flex: 0 0 45%; min-height: 0; }
-.s2-chart .s2-legend { font-size: 9px; color: #666; padding: 1px 2px; }
-.s2-chart .s2-help {
-  font-size: 9px; color: #444; padding: 1px 3px;
-  background: #f9f9f5; border-bottom: 1px solid #ccc;
-  line-height: 1.3;
+.s2-chart .s2-body {
+  flex: 1 1 auto;
+  display: flex; flex-direction: row;
+  min-height: 0; overflow: hidden;
 }
-.s2-chart .s2-txtlist { font-size: 10px; line-height: 1.25; flex: 1; min-height: 0; overflow: auto; }
+.s2-chart .s2-chart-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex; flex-direction: column;
+  border-right: 1px solid #ccc;
+}
+.s2-chart .s2-svg {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  cursor: crosshair;
+}
+.s2-chart .s2-echarts {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+.s2-chart .s2-legend {
+  flex: 0 0 auto;
+  font-size: 9px; color: #666;
+  padding: 1px 4px;
+  background: #f4f4f0;
+  border-top: 1px solid #ddd;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* S2 txt 列表：右侧固定宽度，显示 record 号与函数值 */
+.s2-chart .s2-txtlist {
+  width: 42%; flex: 0 0 auto;
+  min-width: 140px;
+  box-sizing: border-box;
+  background: #ffffff; color: #222;
+  border: none;
+  border-left: 1px solid #ccc;
+  font-family: monospace; font-size: 9px; line-height: 1.25;
+  resize: none;
+  padding: 3px 4px; overflow: auto;
+}
 .s2-chart .s2-empty {
-  flex: 0 0 45%; min-height: 0;
+  flex: 1 1 auto; min-height: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: #c00; background: #fff0f0;
-  border: 1px dashed #c00; margin: 2px 0; padding: 4px;
+  border: 1px dashed #c00; margin: 4px; padding: 4px;
   text-align: center;
+}
+.s2-chart .s2-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #ffffe0;
+  border: 1px solid #888;
+  padding: 4px 6px;
+  font-size: 10px;
+  font-family: monospace;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.25);
+  pointer-events: none;
+  white-space: nowrap;
 }
 /* Result Details 占位 */
 .rd-empty { font-size: 10px; color: #888; padding: 6px; text-align: center; }
@@ -870,6 +915,61 @@ fieldset legend {
   padding: 6px; display: flex; justify-content: flex-end; gap: 6px;
   background: #c0c0c0; border-top: 1px solid #888;
 }
+
+/* === Log Viewer（日志查看器浮动窗口） === */
+.logviewer-backdrop {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.25);
+}
+.logviewer-window {
+  position: fixed;
+  background: #f4f4f4; border: 2px solid #3a6ea5;
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.4);
+  display: flex; flex-direction: column;
+  min-width: 360px; min-height: 200px;
+}
+.logviewer-title {
+  background: linear-gradient(180deg, #316ac5, #1b488e);
+  color: #fff; padding: 4px 8px; font-weight: 700; cursor: move;
+  display: flex; align-items: center; justify-content: space-between;
+  user-select: none;
+}
+.logviewer-title-text { font-size: 13px; }
+.logviewer-title-btns { display: flex; gap: 2px; }
+.lv-btn {
+  background: transparent; color: #fff; border: 1px solid #bcd; cursor: pointer;
+  width: 22px; height: 18px; font-size: 12px; line-height: 1; padding: 0;
+}
+.lv-btn:hover { background: rgba(255,255,255,0.2); }
+.lv-close { border-color: #f99; }
+.lv-close:hover { background: #c00; }
+.logviewer-toolbar {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 4px 6px; background: #e6e6e6; border-bottom: 1px solid #aaa;
+}
+.lv-search { width: 180px; padding: 2px 4px; font-size: 12px; border: 1px solid #777; }
+.lv-match { font-size: 11px; color: #333; min-width: 42px; text-align: center; }
+.lv-sep { width: 1px; height: 16px; background: #aaa; margin: 0 2px; }
+.lv-wrap, .lv-filter { font-size: 11px; display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
+.lv-filter input, .lv-wrap input { margin: 0; }
+.logviewer-body {
+  flex: 1; overflow: auto; background: #1e1e1e; color: #d4d4d4;
+  font-family: 'Consolas','Courier New',monospace; font-size: 12px; line-height: 1.5;
+  padding: 6px 8px; white-space: pre;
+}
+.log-line { padding: 0 2px; }
+.log-line-current { background: #3a3a00; }
+.log-time { color: #888; }
+.log-level { font-weight: 700; }
+.log-module { font-weight: 700; }
+.log-msg { color: #d4d4d4; }
+.log-hit { background: #ffeb3b; color: #000; border-radius: 2px; }
+.logviewer-status {
+  padding: 2px 6px; font-size: 11px; color: #333;
+  background: #e6e6e6; border-top: 1px solid #aaa;
+}
+.lv-state { padding: 8px; color: #aaa; }
+.lv-error { color: #ff6b6b; }
 
 /* === Context Menu === */
 .ctxmenu {
