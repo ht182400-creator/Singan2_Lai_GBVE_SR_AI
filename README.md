@@ -15,8 +15,15 @@ SINGAN2 算法的现代化重构版本：纯 C++17 算法核心 + HTTP API + Web
 | M1 解析层 | `mariner_reader` + `readzfile` C++ 移植 + 对拍 | ✅ 通过 |
 | M2 算法核心 | `imageops` + `wtable` + `c_si2` + `all32` C++ 移植 | ✅ 通过（`run_algorithm` 输出与 poc golden 逐项一致） |
 | M3 HTTP API | C++ HTTP server（cpp-httplib）暴露算法 | ✅ 通过（`server/smoke_test.py` 全 PASS） |
-| M4 Web 前端 | React + ECharts 调用 API（1:1 复刻原版 MFC 主界面） | ✅ 完成（P0–P5 全链路：session/image/imageops/graph/zfile/export/config/analyze-batch/IR2 双文件） |
-| M5 批量统计 | Statistics / Make Graph 批量多 record 并行计算 + Result Details + S2Chart 跨 record 曲线 | ✅ 完成（服务端线程池并行，前端 Vitest 37 文件全绿） |
+| M4 Web 前端 | React + ECharts 调用 API（1:1 复刻原版 MFC 主界面） | ✅ 完成（P0–P5 全链路 + ATB 面板真实移植 + Graph 操作区 + 本地文件选择对话框） |
+| M5 批量统计 | Statistics / Make Graph 批量多 record 并行计算 + Result Details + S2Chart 跨 record 曲线 | ✅ 完成（服务端线程池并行；Make Graph 支持 4 种测量方法） |
+
+## 最近更新（v0.6.0，2026-09-03）
+
+- **ATB 面板真实移植（P4）**：`/api/atb/load|area|update|ctb`，ATB/SRU 二进制格式（128×512×8B；SRU=32B 头+256×1024×8B），area 切换、条目编辑整表写回、Show/Show All 彩色叠加、Set 4D 公式、CTB 面额尺寸。
+- **本地文件选择对话框**：`GET /api/fs/list` + `FileBrowser` 组件（目录单击进入、`..` 上级、路径可手输），ATB/CTB/GPH 三处共用。
+- **Graph 操作区 1:1 重建**：测量方法列表（`IDC_LIST_GRAPH_FUNS`）、原版 .GPH 二进制存取（`/api/graph/gph-save|load`，9400B）、Combine 多文件累加；Mul-X/ABS 为原版死控件（TBD），面板内附说明。
+- **性能**：Make Graph 7s→2s（批量提取+单波快速路径）、整通道预载「秒载 1000 张」、毫秒级后端日志 + LogViewer。详见 `docs/优化与构建说明.md` 与 `docs/11_模块功能同步方案_P0-P5.md`。
 
 ## 目录结构
 
@@ -69,10 +76,12 @@ cmake --build build --config Debug
 | POST | `/api/analyze-batch` | P1 | 批量分析（Statistics / Make Graph 用）：单文件多 record 一次请求，服务端线程池并行 |
 | POST | `/api/analyze` | P1 | multipart 上传文件分析 |
 | POST | `/api/imageops` | P2 | 对记录/波段应用算子（gradient / niti / smooth …） |
-| POST | `/api/graph/make` | P3 | 生成图表序列（黑/白像素数，复刻 CreateGraph1 + ComputeSuppleResult） |
+| POST | `/api/graph/make` | P3 | 生成图表序列，复刻 CreateGraph1 + ComputeSuppleResult；`result_method` 选测量方法（0=黑/白像素数 1=黑/白水平跨度 2/4=TBD 3=相邻差分>阈值累加） |
 | POST | `/api/graph/combine` | P3 | 序列合成（diff / max / min / avg） |
 | POST | `/api/graph/save` | P3 | 保存 .grp（JSON 文本） |
 | POST | `/api/graph/load` | P3 | 读取 .grp |
+| POST | `/api/graph/gph-save` | P3 | 保存原版 .GPH 二进制（head[100]+series1/2 各 2300 u16） |
+| POST | `/api/graph/gph-load` | P3 | 读取原版 .GPH 二进制（Load Graph/Combine 用） |
 | POST | `/api/zfile/parse` | P4 | 解析坐标文件（shift_jis） |
 | POST | `/api/atb/load` | P4 | 加载 ATB（SRU 自动探测），返回 area 名单 + area#0 列表与原始字节 |
 | POST | `/api/atb/area` | P4 | 切换 ATB area（对应原版类型下拉） |
@@ -100,19 +109,19 @@ python server/smoke_test.py
 cd web
 npm install
 npm run dev          # Vite 开发服务器 @ :5173（已配 /api -> :8080 代理）
-npm test             # Vitest 全量测试（37 文件，全部用例全绿）
+npm test             # Vitest：38 文件 / 198 用例（181 通过；App.test 与 debugLogger 共 17 例为既有 jsdom canvas 失败）
 ```
 
-### Web 布局冻结约束（重要）
+### Web 布局约束（重要）
 
-原版为 Win32/MFC（`Singan2_Lai_GBVE_SR_OLD` 工程），Web 端按 **1:1 像素级** 复刻其主界面：
+原版为 Win32/MFC（`Singan2_Lai_GBVE_SR_OLD` 工程），Web 端按 **1:1 像素级** 复刻其主界面（2026-09-03 起用户已放宽整体尺寸）：
 
-- 主窗口 `.main-window`：`1700 × 1050`，`scale(min(100vw/1700, 100vh/1050))`
-- **左侧画布 `.main-canvas`：`left:0; top:88; width:900; height:912`**（已锁定，禁止改动）
-- **右侧区 `.right-area`：`left:900; top:88; width:800; height:682`**（起点 900 = 左侧画布右沿）
-- 顶部 Tab / 底部状态条：宽 `1700`
-- 后续任何"对齐原版"的调整，**只能在 right-area（起点 900）内部微调坐标**，绝不动左侧结构。
-- UI 还原的权威依据：`Singan2_Lai_GBVE_SR_OLD` 的 `resource.rc` 与 `WinMain.cpp`（控件文字 / ID），而非截图。
+- 主窗口 `.main-window`：`2400 × 1450` 基准（支持右下角手柄等比缩放）
+- **左侧画布 `.main-canvas`：宽 `900` 锁定**（禁止改动）
+- **右侧区 `.right-area`：`left:1100; top:44; width:1300; height:1356`**
+- 右侧各面板为 `.rc` 容器：**位置由 `RC` 组件的 `dl/dt` props 决定**（CSS left/top 仅为文档），用户拖拽后持久化到 `localStorage(rcpos:<id>)`，改默认位置必须改 `dl/dt`
+- 面板内部换算：`left = (rcX − 613) × 1.201`、`top = rcY × 1.337`
+- UI 还原的权威依据：`Singan2_Lai_GBVE_SR_OLD` 的 `resource.rc` 与 `WinMain.cpp`（控件文字 / ID / 坐标），而非截图；功能语义以 OLD 源码为准（如 `ComputeSuppleResult` 测量方法、Mul-X/ABS 为死控件）。
 
 ## 测试（对拍验证）
 
@@ -135,7 +144,7 @@ cd poc && python run_poc.py --dat ../data/2A_DA_111017_115542.dat \
 前端回归（Vitest）：
 
 ```bash
-cd web && npm test        # ✅ 37 文件，全部用例全绿
+cd web && npm test        # 38 文件 / 198 用例（181 通过；17 例为既有 jsdom canvas 失败）
 ```
 
 ## 编码约定

@@ -424,25 +424,82 @@ static void niti_on_twoimg(ImageEngine& eng, int tab, int threshold) {
     eng.to_2byte_orver_write(tab, out);
 }
 
-// 在指定矩形区域内统计黑/白像素数（复刻 ComputeSuppleResult case 0：summary pixels）
-static std::pair<int, int> count_black_white(const std::vector<uint16_t>& img,
-                                             int x, int y, int w, int h,
-                                             int color_point) {
+// 在指定矩形区域内按测量方法计算（复刻 OLD MainRun.cpp ComputeSuppleResult）：
+//   method 0 = Sum pixels：区域内 0(黑)/255(白) 像素计数
+//   method 1 = width：黑/白像素的水平跨度（最左到最右列 +1）
+//   method 2 = height：原版 TBD（空实现，返回 0）
+//   method 3 = differenct neighbour：区域内水平+垂直相邻差分绝对值 > 阈值 累加（封顶 65535）
+// OLD 中 method 0-2 传 threshold=0，仅 method 3 使用二值化滑条阈值；color 偏移 = color_point-150。
+static std::pair<int, int> compute_supple_result(const std::vector<uint16_t>& img,
+                                                 int x, int y, int w, int h,
+                                                 int color_point, int method, int threshold) {
     int black = 0, white = 0;
     int offset = color_point - 150;
-    int x1 = std::max(0, x);
-    int y1 = std::max(0, y);
-    int x2 = std::min(singan2::X_SIZE, x + w);
-    int y2 = std::min(singan2::Y_SIZE, y + h);
-    for (int i = y1; i < y2; i++) {
-        for (int j = x1; j < x2; j++) {
-            int color = static_cast<int>(img[i * singan2::X_SIZE + j]) + offset;
-            if (color > 255) color = 255;
-            if (color < 0) color = 0;
-            if (color == 0) black++;
-            else if (color == 255) white++;
+    auto clamp_color = [&](int v) {
+        int c = v + offset;
+        if (c > 255) c = 255;
+        if (c < 0) c = 0;
+        return c;
+    };
+    const int x1 = std::max(0, x);
+    const int y1 = std::max(0, y);
+    const int x2 = std::min(singan2::X_SIZE, x + w);
+    const int y2 = std::min(singan2::Y_SIZE, y + h);
+    auto in_region = [&](int i, int j) { return i >= y1 && i < y2 && j >= x1 && j < x2; };
+
+    if (method == 0) {
+        for (int i = y1; i < y2; i++) {
+            for (int j = x1; j < x2; j++) {
+                const int c = clamp_color(img[i * singan2::X_SIZE + j]);
+                if (c == 0) black++;
+                else if (c == 255) white++;
+            }
         }
+    } else if (method == 1) {
+        // 水平跨度：从左/右扫描列，列内存在黑(0)像素即为黑边界，白(255)同理
+        int blackLeft = -1, blackRight = -1, whiteLeft = -1, whiteRight = -1;
+        for (int j = 0; j < singan2::X_SIZE && (blackLeft < 0 || whiteLeft < 0); j++) {
+            for (int i = y1; i < y2; i++) {
+                if (!in_region(i, j)) continue;
+                const int c = clamp_color(img[i * singan2::X_SIZE + j]);
+                if (c == 0 && blackLeft < 0) blackLeft = j;
+                if (c == 255 && whiteLeft < 0) whiteLeft = j;
+                if (blackLeft >= 0 && whiteLeft >= 0) break;
+            }
+        }
+        for (int j = singan2::X_SIZE - 1; j >= 0 && (blackRight < 0 || whiteRight < 0); j--) {
+            for (int i = y1; i < y2; i++) {
+                if (!in_region(i, j)) continue;
+                const int c = clamp_color(img[i * singan2::X_SIZE + j]);
+                if (c == 0 && blackRight < 0) blackRight = j;
+                if (c == 255 && whiteRight < 0) whiteRight = j;
+                if (blackRight >= 0 && whiteRight >= 0) break;
+            }
+        }
+        if (blackLeft >= 0 && blackRight >= 0) black = std::abs(blackRight - blackLeft) + 1;
+        if (whiteLeft >= 0 && whiteRight >= 0) white = std::abs(whiteRight - whiteLeft) + 1;
+    } else if (method == 3) {
+        // 相邻差分（水平 + 垂直），超过阈值累加；OLD 原样：black = white = sum
+        long sum = 0;
+        for (int i = y1; i < y2; i++) {
+            for (int j = x1; j < x2; j++) {
+                if (j + 1 < std::min(singan2::X_SIZE, x + w)) {
+                    const int c = std::abs(static_cast<int>(img[i * singan2::X_SIZE + j + 1]) -
+                                           static_cast<int>(img[i * singan2::X_SIZE + j]));
+                    if (c > threshold) sum += c;
+                }
+                if (i + 1 < std::min(singan2::Y_SIZE, y + h)) {
+                    const int c = std::abs(static_cast<int>(img[(i + 1) * singan2::X_SIZE + j]) -
+                                           static_cast<int>(img[i * singan2::X_SIZE + j]));
+                    if (c > threshold) sum += c;
+                }
+            }
+        }
+        if (sum > 65535) sum = 65535;
+        if (sum < 0) sum = 0;
+        black = white = static_cast<int>(sum);
     }
+    // method 2 / 4：原版 TBD（case 2 为空、case 4 无 case），black = white = 0
     return {black, white};
 }
 
@@ -452,7 +509,7 @@ static bool make_graph_record(const std::string& dat_path, int record,
                               const std::string& niti_type, int grad_type, int gain,
                               int threshold, int color_point,
                               int area_x, int area_y, int area_w, int area_h,
-                              bool use_black,
+                              bool use_black, int result_method,
                               int& out_value, std::string& err) {
     ImageEngine eng;
     if (!build_engine(dat_path, record, wtable_path, eng, err)) return false;
@@ -479,7 +536,10 @@ static bool make_graph_record(const std::string& dat_path, int record,
         return false;
     }
     const auto& two = eng.twoimg_at(tab);
-    auto [black, white] = count_black_white(two, area_x, area_y, area_w, area_h, color_point);
+    // OLD 原样：method 0-2 不用阈值（传 0），仅 method 3 使用二值化阈值
+    auto [black, white] = compute_supple_result(two, area_x, area_y, area_w, area_h,
+                                                color_point, result_method,
+                                                result_method == 3 ? threshold : 0);
     out_value = use_black ? black : white;
     return true;
 }
@@ -492,7 +552,7 @@ static bool make_graph_record_fast(const uint8_t* raw_wave,
                                    const std::string& niti_type, int grad_type, int gain,
                                    int threshold, int color_point,
                                    int area_x, int area_y, int area_w, int area_h,
-                                   bool use_black,
+                                   bool use_black, int result_method,
                                    int& out_value, std::string& err) {
     ImageEngine eng;
     // 仅装入当前需要的单波段：oneimg 供 NiBlack，twoimg 供 Gra+Bin/Bin
@@ -514,7 +574,9 @@ static bool make_graph_record_fast(const uint8_t* raw_wave,
         return false;
     }
     const auto& img = eng.twoimg_at(eng.tab_no);
-    auto [black, white] = count_black_white(img, area_x, area_y, area_w, area_h, color_point);
+    auto [black, white] = compute_supple_result(img, area_x, area_y, area_w, area_h,
+                                                color_point, result_method,
+                                                result_method == 3 ? threshold : 0);
     out_value = use_black ? black : white;
     return true;
 }
@@ -958,6 +1020,7 @@ int main(int argc, char** argv) {
                 return;
             }
             if (std::filesystem::is_regular_file(p, ec)) p = p.parent_path();
+            p = p.lexically_normal(); // 规范化 ".." 等相对段，保证返回路径可直接再导航
 
             std::string dirs = "[", files = "[";
             for (std::filesystem::directory_iterator it(p, ec), end; it != end; it.increment(ec)) {
@@ -1597,6 +1660,9 @@ int main(int argc, char** argv) {
         int area_w = json_get_int(req.body, "area_w", 20);
         int area_h = json_get_int(req.body, "area_h", 20);
         bool use_black = json_get_bool(req.body, "black", true);
+        // 测量方法（OLD IDC_LIST_GRAPH_FUNS）：0=Sum pixels 1=width 2=height(TBD) 3=differenct neighbour 4=(TBD)
+        int result_method = json_get_int(req.body, "result_method", 0);
+        if (result_method < 0 || result_method > 4) result_method = 0;
 
         // 先按 start/step/max_records 展开本次要处理的 record 序号（越界即止）
         std::vector<int> recs;
@@ -1637,11 +1703,13 @@ int main(int argc, char** argv) {
                     const uint8_t* ptr = flat.data() + static_cast<size_t>(recs[i]) * singan2::ONESIZE;
                     ok_i = make_graph_record_fast(ptr, wtable_path, wave_name, niti_type,
                                                   grad_type, gain, threshold, color_point,
-                                                  area_x, area_y, area_w, area_h, use_black, v, err);
+                                                  area_x, area_y, area_w, area_h, use_black,
+                                                  result_method, v, err);
                 } else {
                     ok_i = make_graph_record(dat_path, recs[i], wtable_path, wave_name, niti_type,
                                              grad_type, gain, threshold, color_point,
-                                             area_x, area_y, area_w, area_h, use_black, v, err);
+                                             area_x, area_y, area_w, area_h, use_black,
+                                             result_method, v, err);
                 }
                 if (ok_i) {
                     values[i] = v; ok[i] = 1;
@@ -1765,6 +1833,96 @@ int main(int argc, char** argv) {
         std::ostringstream ss;
         ss << in.rdbuf();
         send_ok(res, std::string("{\"path\":\"") + json_escape(path) + "\",\"series\":" + ss.str() + "}");
+    });
+
+    // ---- .GPH 原版二进制格式存取（复刻 OLD IDC_BUTTON_SAVE_GRAPH / DisplayGraphs）----
+    // 布局：USHORT head[100]（[0]=tabNo [1]=startX [2]=startY [3]=rangeX [4]=rangeY [5]=s
+    //       [6]=count1 [7]=count2 [8]=drawBlack，其余 0）+ series1[MAX_DATA] + series2[MAX_DATA]。
+    // MAX_DATA = 2300（OLD MAIN.H），文件总长 = 200 + 2*2300*2 = 9400 字节。
+    static const int GPH_MAX_DATA = 2300;
+    svr.Post("/api/graph/gph-save", [](const httplib::Request& req, httplib::Response& res) {
+        std::string path = json_get_str(req.body, "path", "");
+        if (path.empty()) {
+            send_err(res, 400, "path 必填");
+            return;
+        }
+        try {
+            std::vector<int> s1 = json_parse_int_array(json_get_raw(req.body, "series1"));
+            std::vector<int> s2 = json_parse_int_array(json_get_raw(req.body, "series2"));
+            if ((int)s1.size() > GPH_MAX_DATA || (int)s2.size() > GPH_MAX_DATA) {
+                send_err(res, 400, "series 超过 MAX_DATA=2300");
+                return;
+            }
+            uint16_t head[100] = {0};
+            head[0] = (uint16_t)json_get_int(req.body, "tab_no", 0);
+            head[1] = (uint16_t)json_get_int(req.body, "start_x", 0);
+            head[2] = (uint16_t)json_get_int(req.body, "start_y", 0);
+            head[3] = (uint16_t)json_get_int(req.body, "range_x", 0);
+            head[4] = (uint16_t)json_get_int(req.body, "range_y", 0);
+            head[5] = (uint16_t)json_get_int(req.body, "s", 0);
+            head[6] = (uint16_t)s1.size();
+            head[7] = (uint16_t)s2.size();
+            head[8] = json_get_bool(req.body, "black", true) ? 1 : 0;
+
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) {
+                send_err(res, 500, "无法写入: " + path);
+                return;
+            }
+            out.write(reinterpret_cast<const char*>(head), sizeof(head));
+            for (int i = 0; i < GPH_MAX_DATA; i++) {
+                uint16_t v = (i < (int)s1.size()) ? (uint16_t)s1[i] : 0;
+                out.write(reinterpret_cast<const char*>(&v), sizeof(v));
+            }
+            for (int i = 0; i < GPH_MAX_DATA; i++) {
+                uint16_t v = (i < (int)s2.size()) ? (uint16_t)s2[i] : 0;
+                out.write(reinterpret_cast<const char*>(&v), sizeof(v));
+            }
+            out.close();
+            send_ok(res, std::string("{\"ok\":true,\"path\":\"") + json_escape(path) +
+                     "\",\"count1\":" + std::to_string(s1.size()) +
+                     ",\"count2\":" + std::to_string(s2.size()) + "}");
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
+    });
+
+    svr.Post("/api/graph/gph-load", [](const httplib::Request& req, httplib::Response& res) {
+        std::string path = json_get_str(req.body, "path", "");
+        if (path.empty()) {
+            send_err(res, 400, "path 必填");
+            return;
+        }
+        std::ifstream in(path, std::ios::binary);
+        if (!in) {
+            send_err(res, 404, "文件不存在: " + path);
+            return;
+        }
+        uint16_t head[100];
+        in.read(reinterpret_cast<char*>(head), sizeof(head));
+        if (!in) {
+            send_err(res, 500, "GPH 文件不完整（头不足 200 字节）: " + path);
+            return;
+        }
+        std::vector<uint16_t> s1(GPH_MAX_DATA), s2(GPH_MAX_DATA);
+        in.read(reinterpret_cast<char*>(s1.data()), s1.size() * sizeof(uint16_t));
+        in.read(reinterpret_cast<char*>(s2.data()), s2.size() * sizeof(uint16_t));
+        in.close();
+        const int count1 = std::min<int>(head[6], GPH_MAX_DATA);
+        const int count2 = std::min<int>(head[7], GPH_MAX_DATA);
+        std::string j1 = "[", j2 = "[";
+        for (int i = 0; i < count1; i++) { if (i) j1 += ","; j1 += std::to_string(s1[i]); }
+        for (int i = 0; i < count2; i++) { if (i) j2 += ","; j2 += std::to_string(s2[i]); }
+        j1 += "]"; j2 += "]";
+        send_ok(res, std::string("{\"path\":\"") + json_escape(path) +
+                 "\",\"head\":{\"tabNo\":" + std::to_string(head[0]) +
+                 ",\"startX\":" + std::to_string(head[1]) +
+                 ",\"startY\":" + std::to_string(head[2]) +
+                 ",\"rangeX\":" + std::to_string(head[3]) +
+                 ",\"rangeY\":" + std::to_string(head[4]) +
+                 ",\"s\":" + std::to_string(head[5]) +
+                 ",\"black\":" + (head[8] ? "true" : "false") + "}" +
+                 ",\"series1\":" + j1 + ",\"series2\":" + j2 + "}");
     });
 
     // ============ P4 ATB / VTB / 坐标 ============

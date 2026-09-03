@@ -42,7 +42,7 @@ import GraphViewOverlay from './components/GraphViewOverlay.jsx';
 import {
   openSession, getImage, analyzeByPath, analyzeBatchByPath, runImageOps, makeGraph, getSmallImage,
   getChannelFrames, parseZfile, uploadDat, getBackendLog, parseBackendLog,
-  loadAtb, atbArea, atbUpdate, loadCtb,
+  loadAtb, atbArea, atbUpdate, loadCtb, gphSave, gphLoad,
 } from './api.js';
 
 // ---------------------------------------------------------------------------
@@ -90,6 +90,8 @@ const DEFAULT_WTABLE = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\G
 // ATB / CTB 默认样本（复刻 OLD LoadATB / Load Size... 的文件选择，ZAR 样本与 OLD 一致）
 const ATB_DEFAULT_BIN = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\ZAR\\X_ATB_ZAR_132006050001.bin';
 const ATB_DEFAULT_CTB = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\ZAR\\X_CTB_ZAR_131601260001_BV100.bin';
+// .GPH 图形文件目录（OLD graphfilePath = "GraphFiles"，Save Graph 缺省名 _tempGraph）
+const GRAPH_FILES_DIR = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\GraphFiles';
 // Show All 四色轮换（复刻 OLD OnDrawPaint：ii%4 -> 红/绿/黄/品红）
 const ATB_COLORS = ['rgb(255,0,0)', 'rgb(0,255,0)', 'rgb(255,255,0)', 'rgb(255,0,255)'];
 // 批量分析取样数上限（仅作极端保护，正常 = 本文件 record 数；MFC 为一次性全量返回）
@@ -132,6 +134,11 @@ export default function App() {
   const [atbOverlay, setAtbOverlay] = useState(null);          // Show All 叠加矩形（IR1 上绘制）
   const [sizeNotes, setSizeNotes] = useState([]);              // CTB note 尺寸列表（OLD IDC_COMBO_DENOS_SIZE）
   const [sizeIdx, setSizeIdx] = useState(0);                   // 选中 note 尺寸
+
+  // Graph 操作区 state（复刻 OLD 991-1279, y265-341）
+  const [gphName, setGphName] = useState('');                  // 图形文件名（IDC_EDIT_GRAPH_FILE_NAME，原版无 handler）
+  const [gphResultMethod, setGphResultMethod] = useState(0);   // 测量方法（IDC_LIST_GRAPH_FUNS：0=Sum pixels 1=width 3=diff neighbour）
+  const [gphList, setGphList] = useState([]);                  // 已载 .GPH 名单（IDC_EDIT_AREA_LIST，原版为隐藏多行框）
 
   // ---- 全局缩放（拖右下角手柄缩放，内容等比放大/缩小）----
   const BASE_W = 2400; // .main-window 基准宽度（styles.css 一致，2026-09-03 左侧扩宽 200 → 2200→2400）
@@ -728,6 +735,7 @@ export default function App() {
         ...ipParams,
         ...area,
         black: mgBw === 'black',
+        resultMethod: gphResultMethod, // OLD IDC_LIST_GRAPH_FUNS 测量方法（0=Sum pixels / 1=width / 3=diff neighbour）
         wtablePath,
       };
       const tasks = [];
@@ -757,7 +765,7 @@ export default function App() {
     } finally {
       stopBusy();
     }
-  }, [datPath1, datPath2, recordCount2, mgInclude1, mgInclude2, viewWave, mousePos, mouseSize, ipParams, mgBw, mgStart, mgStep, mgTimes, wtablePath, pushHistory]);
+  }, [datPath1, datPath2, recordCount2, mgInclude1, mgInclude2, viewWave, mousePos, mouseSize, ipParams, mgBw, mgStart, mgStep, mgTimes, wtablePath, gphResultMethod, pushHistory]);
 
   // ===== View All Result：导出 Statistics / Make Graph 的跨 record 数据为 CSV =====
   const exportAllResults = useCallback(() => {
@@ -1136,13 +1144,96 @@ export default function App() {
   // Load Size... 按钮：打开文件浏览对话框（等价 OLD GetOpenFileName，*.bin）
   const handleAtbLoadSize = useCallback(() => setAtbBrowser('ctb'), []);
 
-  // 文件浏览对话框「打开」：按目标分发到 ATB 载入或 CTB 尺寸载入
+  // ==================== Graph 操作区（复刻 OLD WinMain 1980-2065 + DisplayGraphs）====================
+  // Load Graph...（IDC_BUTTON_LOAD_GRAPH）：读 .GPH（head[100]+series1/2）→ 立即显示 + 加入名单
+  const doLoadGph = useCallback(async (p) => {
+    try {
+      const r = await gphLoad({ path: p });
+      setGraphData({
+        rows: r.series1.map((v, i) => ({ record: i, value: v })),
+        rows2: r.series2.map((v, i) => ({ record: i, value: v })),
+        file1_path: p,
+      });
+      setGphList((l) => (l.some((x) => x.path === p) ? l : [...l, { name: p.split(/[\\/]/).pop(), path: p }]));
+      pushHistory(`Load Graph: ${p.split(/[\\/]/).pop()} (${r.series1.length} pts)`);
+    } catch (e) {
+      pushHistory(`Load Graph 失败: ${e.message}`);
+    }
+  }, [pushHistory]);
+
+  // 文件浏览对话框「打开」：按目标分发到 ATB / CTB / GPH 载入
   const handleBrowserOk = useCallback((p) => {
     const kind = atbBrowser;
     setAtbBrowser(null);
     if (kind === 'atb') doAtbLoad(p);
     else if (kind === 'ctb') doLoadCtb(p);
-  }, [atbBrowser, doAtbLoad, doLoadCtb]);
+    else if (kind === 'gph') doLoadGph(p);
+  }, [atbBrowser, doAtbLoad, doLoadCtb, doLoadGph]);
+
+  // Load Graph... 按钮：打开 .GPH 文件选择
+  const handleLoadGraphBtn = useCallback(() => setAtbBrowser('gph'), []);
+
+  // Save Graph（IDC_BUTTON_SAVE_GRAPH）：当前序列存 <GraphFiles>\<名>.GPH（空名用 _tempGraph，同 OLD）
+  const handleSaveGraph = useCallback(async () => {
+    if (!graphData || !graphData.rows || graphData.rows.length === 0) {
+      window.alert('No graph data to save! Run Make Graph / Load Graph first.');
+      return;
+    }
+    const name = (gphName || '_tempGraph').replace(/\.gph$/i, '');
+    const p = `${GRAPH_FILES_DIR}\\${name}.GPH`;
+    try {
+      await gphSave({
+        path: p,
+        head: {
+          startX: mousePos ? mousePos.x : 0, startY: mousePos ? mousePos.y : 0,
+          rangeX: mouseSize ? mouseSize.w : 0, rangeY: mouseSize ? mouseSize.h : 0,
+          s: ipParams.threshold, black: mgBw === 'black',
+        },
+        series1: graphData.rows.map((r) => r.value),
+        series2: (graphData.rows2 || []).map((r) => r.value),
+      });
+      pushHistory(`Save Graph: ${p} (${graphData.rows.length} pts)`);
+    } catch (e) {
+      pushHistory(`Save Graph 失败: ${e.message}`);
+    }
+  }, [graphData, gphName, mousePos, mouseSize, ipParams.threshold, mgBw, pushHistory]);
+
+  // Clear（IDC_BUTTON_CLEAR_GRAPH_LIST）：清空已载名单（原版为隐藏多行框 IDC_EDIT_AREA_LIST）
+  const handleClearGraphList = useCallback(() => {
+    setGphList([]);
+    pushHistory('Clear Graph List');
+  }, [pushHistory]);
+
+  // Graph (Combine)（IDC_BUTTON_MAKE_COMBINE_GRAPH）：名单内全部 .GPH 逐点累加（复刻 DisplayGraphs）
+  const handleCombineGraph = useCallback(async () => {
+    if (gphList.length === 0) {
+      window.alert('No graph files loaded! Use Load Graph... first.');
+      return;
+    }
+    try {
+      let s1 = null;
+      let s2 = null;
+      for (const item of gphList) {
+        const r = await gphLoad({ path: item.path });
+        if (s1 === null) {
+          s1 = [...r.series1];
+          s2 = [...r.series2];
+        } else {
+          // OLD DisplayGraphs：combineDatas[jj] += dataValues[jj]
+          for (let i = 0; i < r.series1.length && i < s1.length; i++) s1[i] += r.series1[i];
+          for (let i = 0; i < r.series2.length && i < s2.length; i++) s2[i] += r.series2[i];
+        }
+      }
+      setGraphData({
+        rows: s1.map((v, i) => ({ record: i, value: v })),
+        rows2: s2.map((v, i) => ({ record: i, value: v })),
+        file1_path: 'combine',
+      });
+      pushHistory(`Graph (Combine): ${gphList.length} 文件累加完成`);
+    } catch (e) {
+      pushHistory(`Graph (Combine) 失败: ${e.message}`);
+    }
+  }, [gphList, pushHistory]);
 
   // Alt+R global → Cont. Confirm dialog
   useEffect(() => {
@@ -1396,8 +1487,18 @@ export default function App() {
             />
           </div>
         </RC>
-        {/* Graph File 行 (rc 997,265) */}
-        <RC id="graph-file" className="rc-graph-file" dl={461} dt={350}><GraphFileRow pushHistory={pushHistory} /></RC>
+        {/* Graph 操作区 (rc 997,265 原址；默认移至 VTB 右侧空位，RC 可拖拽微调) */}
+        <RC id="graph-file" className="rc-graph-file" dl={810} dt={300}>
+          <GraphFileRow
+            gphName={gphName} setGphName={setGphName}
+            resultMethod={gphResultMethod} setResultMethod={setGphResultMethod}
+            onLoadGraph={handleLoadGraphBtn}
+            onSaveGraph={handleSaveGraph}
+            onClearList={handleClearGraphList}
+            onCombine={handleCombineGraph}
+            onContextMenu={onContextMenu}
+          />
+        </RC>
         {/* Graph1 / Graph2 / Result Details 合并为单一「Graph 结果」面板（更友好、减少零散容器） */}
         <RC id="graph-result" className="rc-graph-result" dl={547} dt={475}>
           <GraphResultPanel
@@ -1424,8 +1525,8 @@ export default function App() {
             graphData2={(filesDiffer && mgInclude2 && batchStats2?.all) ? { record_count: batchStats2.all.length, rows: batchStats2.all.map((r) => ({ record: r.recordNo - 1, s2: r.s2, etc: r.etc })) } : null}
           />
         </RC>
-        {/* VTB 区 (rc 915,147) — resource.rc 真实存在，曾被误删 */}
-        <RC id="vtb" className="rc-vtb" dl={362} dt={197}><VtbPanel pushHistory={pushHistory} /></RC>
+        {/* VTB 区 (rc 915,147；下移 100 给加高后的 ATB 让位) — resource.rc 真实存在，曾被误删 */}
+        <RC id="vtb" className="rc-vtb" dl={362} dt={297}><VtbPanel pushHistory={pushHistory} /></RC>
         {/* ATB 区 (rc 917,4) — 1:1 复刻 OLD ATB 控件组 */}
         <RC id="atb" className="rc-atb" dl={364} dt={5}>
           <AtbPanel
@@ -1589,12 +1690,16 @@ export default function App() {
         />
       )}
 
-      {/* ATB/CTB 本地文件选择对话框（等价 OLD GetOpenFileName） */}
+      {/* ATB/CTB/GPH 本地文件选择对话框（等价 OLD GetOpenFileName） */}
       {atbBrowser && (
         <FileBrowser
-          title={atbBrowser === 'atb' ? 'ATB File selection (*.bin)' : 'CTB File selection (*.bin)'}
-          initialPath={atbBrowser === 'atb' ? atbPath : ATB_DEFAULT_CTB}
-          ext=".bin"
+          title={atbBrowser === 'atb' ? 'ATB File selection (*.bin)'
+            : atbBrowser === 'ctb' ? 'CTB File selection (*.bin)'
+            : 'File selection (*.GPH)'}
+          initialPath={atbBrowser === 'atb' ? atbPath
+            : atbBrowser === 'ctb' ? ATB_DEFAULT_CTB
+            : GRAPH_FILES_DIR}
+          ext={atbBrowser === 'gph' ? '.gph' : '.bin'}
           onOk={handleBrowserOk}
           onClose={() => setAtbBrowser(null)}
         />

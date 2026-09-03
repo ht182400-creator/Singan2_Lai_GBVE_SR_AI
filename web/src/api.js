@@ -138,13 +138,15 @@ export async function runImageOps({ datPath, record = 0, wave = 0, ops = [], wta
 // ============ P3 Graph ============
 
 // 生成图表序列：复刻 OLD CreateGraph1 + ComputeSuppleResult —— 批量统计每 record
-// 在选定区域内的黑/白像素数。返回 { record_count, rows:[{record,value}], wave, threshold, black }
+// resultMethod 对应 OLD IDC_LIST_GRAPH_FUNS 测量方法：
+//   0=Sum pixels（黑/白像素数） 1=width（黑/白水平跨度） 2=height(TBD) 3=differenct neighbour（相邻差分累加，用阈值） 4=(TBD)
+// 返回 { record_count, rows:[{record,value}], wave, threshold, black }
 export async function makeGraph({ datPath, zfilePath = '', wave = 0,
   maxRecords = 16, startRecord = 0, step = 1,
   nitiType = 'Gra+Bin', gradType = 0, gain = 1,
   threshold = 90, colorPoint = 150,
   areaX = 0, areaY = 0, areaW = 20, areaH = 20,
-  black = true,
+  black = true, resultMethod = 0,
   wtablePath = '' }) {
   return postJson('/api/graph/make', {
     dat_path: datPath, zfile_path: zfilePath, wave,
@@ -153,6 +155,7 @@ export async function makeGraph({ datPath, zfilePath = '', wave = 0,
     threshold, color_point: colorPoint,
     area_x: areaX, area_y: areaY, area_w: areaW, area_h: areaH,
     black,
+    result_method: resultMethod,
     wtable_path: wtablePath,
   });
 }
@@ -169,6 +172,24 @@ export async function saveGraph({ path, series = [] }) {
 
 export async function loadGraph({ path }) {
   return postJson('/api/graph/load', { path });
+}
+
+// .GPH 原版二进制保存（复刻 OLD Save Graph：USHORT head[100] + series1[2300] + series2[2300]）
+// head: { tabNo, startX, startY, rangeX, rangeY, s, black }
+export async function gphSave({ path, head = {}, series1 = [], series2 = [] }) {
+  return postJson('/api/graph/gph-save', {
+    path,
+    tab_no: head.tabNo ?? 0, start_x: head.startX ?? 0, start_y: head.startY ?? 0,
+    range_x: head.rangeX ?? 0, range_y: head.rangeY ?? 0,
+    s: head.s ?? 0, black: head.black ?? true,
+    series1, series2,
+  });
+}
+
+// .GPH 原版二进制读取（复刻 OLD Load Graph/DisplayGraphs）
+// -> { path, head:{tabNo,startX,startY,rangeX,rangeY,s,black}, series1[], series2[] }
+export async function gphLoad({ path }) {
+  return postJson('/api/graph/gph-load', { path });
 }
 
 // ============ P4 ATB / VTB / 坐标 ============

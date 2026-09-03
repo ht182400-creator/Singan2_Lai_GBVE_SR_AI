@@ -59,10 +59,12 @@ export default function FileBrowser({ title, initialPath, ext = '', onOk, onClos
         </div>
         <div className="fb-list" onKeyDown={handleListKeyDown} tabIndex={0}>
           {items.parent !== '' && (
-            <div className="fb-item fb-dir" onDoubleClick={() => load(items.parent)}>..</div>
+            <div className="fb-item fb-dir" onClick={() => load(items.parent)} title="返回上级目录">..</div>
           )}
+          {/* 目录：单击即进入（等价资源管理器双击，降低操作成本） */}
           {items.dirs.map((d) => (
-            <div key={`d-${d}`} className="fb-item fb-dir" onDoubleClick={() => load(join(path, d))}>
+            <div key={`d-${d}`} className="fb-item fb-dir" onClick={() => load(join(path, d))}
+              title={`进入目录 ${join(path, d)}`}>
               {`[${d}]`}
             </div>
           ))}

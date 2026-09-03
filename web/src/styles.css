@@ -277,7 +277,7 @@ body {
 .rc-validation { left: 20px; top: 264px; width: 444px; padding-bottom: 40px; }        /* rc 630,216 (到 ~887) */
 /* 红框区域组件：整体紧凑上移，贴合原始 UI 相对布局 */
 .rc-gasoti { left: 19px; top: 390px; width: 453px; padding-bottom: 20px; }
-.rc-graph-file { left: 461px; top: 565px; width: 307px; }       /* 与 GASOTI 同排；2026-09-03 随 VTB 下移避让（VTB 新底 558） */
+.rc-graph-file { left: 810px; top: 300px; width: 307px; }       /* 原址 rc 997,265→web(461,354)；VTB 加高后与 graph-result 之间无空位，默认移至 VTB 右侧空位（RC 可拖拽） */
 /* Make Graph 容器：合并原 StatisticsRow + MakeGraphRow + GraphPlot 三个子组件 */
 .rc-make-graph { left: 20px; top: 500px; width: 520px; height: 360px; z-index: 6; display: flex; flex-direction: column; }
 .rc-make-graph .mg-params { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 3px 6px; background: #d4d0c8; border-bottom: 1px solid #888; font-size: 11px; }
@@ -789,15 +789,23 @@ fieldset legend {
 .statistics-row .btn { height: 18px; font-size: 10px; padding: 0 5px; }
 .statistics-row label { display: inline-flex; align-items: center; gap: 2px; }
 
-/* === Graph File Row (在 .rc-graph-file 容器内正常流) === */
-.graph-file-row {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 2px 6px;
-  background: #d4d0c8; font-size: 11px; border: 1px solid #888;
-}
-.graph-input { width: 90px; height: 16px; font-size: 10px; padding: 1px; }
-.graph-mulx, .graph-coef { display: flex; align-items: center; gap: 2px; font-size: 11px; }
-.graph-num { width: 34px; height: 16px; font-size: 10px; padding: 1px; }
-.graph-txt { width: 64px; height: 16px; font-size: 10px; padding: 1px; }
+/* === Graph 操作区（1:1 复刻 OLD resource.rc 991-1279, y265-341；在 .rc-graph-file 容器内） === */
+.graph-ops { display: flex; flex-direction: column; gap: 3px; padding: 3px;
+  background: #d4d0c8; font-size: 11px; border: 1px solid #888; }
+.graph-ops-name { width: 100%; height: 18px; font-size: 11px; padding: 0 3px; box-sizing: border-box; }
+.graph-ops-mid { display: flex; gap: 4px; align-items: flex-start; }
+.graph-ops-funs { width: 128px; height: 92px; font-size: 11px; font-family: Consolas, monospace; }
+.graph-ops-col2 { display: flex; flex-direction: column; gap: 3px; }
+.graph-ops-col3 { display: flex; flex-direction: column; gap: 3px; margin-left: auto; }
+.graph-ops-line { display: flex; gap: 3px; align-items: center; }
+.graph-ops-line .btn { padding: 1px 4px; font-size: 11px; white-space: nowrap; }
+.graph-ops-num { width: 34px; height: 18px; font-size: 11px; padding: 1px; }
+.graph-ops-abs { min-width: 148px; }
+.graph-ops-bottom { display: flex; gap: 6px; justify-content: flex-end; }
+.graph-ops-bottom .btn { padding: 1px 6px; font-size: 11px; }
+.graph-ops-combine { min-width: 96px; }
+.graph-ops-help { font-size: 10px; color: #555; line-height: 1.5;
+  border-top: 1px dotted #999; padding-top: 2px; }
 
 /* === Row Graph (666–726, h 60) === */
 .row-graph {

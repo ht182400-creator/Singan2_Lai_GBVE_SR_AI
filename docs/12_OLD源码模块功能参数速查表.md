@@ -249,7 +249,27 @@ Web 映射：
 3. **联动逻辑**：选中某项 → `WM_COMMAND: IDC_LIST_GR` → `global_select_no = LB_GETCURSEL + 1`（`WinMain.cpp:1273-1276`）→ 重绘图形。
 4. **与 `IDC_LIST_GRAPH_FUNS` 的区别**（容易混淆）：
    - `IDC_LIST_GR`（运行时）：选"哪个 S2 函数列"参与作图。
-   - `IDC_LIST_GRAPH_FUNS`（resource.rc:182 静态）：选"结果计算方法"（0 像素和 / 1 宽 / 2 高 / 3 邻差），**仅用于 Make Graph 的像素统计**，Web 当前未实现该列表。
+   - `IDC_LIST_GRAPH_FUNS`（resource.rc:182 静态）：选"结果计算方法"（0 像素和 / 1 宽 / 2 高 / 3 邻差），**仅用于 Make Graph 的像素统计**，见第 9 节；Web 已实现（Graph 操作区函数列表 → `/api/graph/make` 的 `result_method`）。
+
+---
+
+## 9. Graph 操作区参数速查（`resource.rc` 991–1279, y265–341）
+
+> **结论：以下参数全部属于 Make Graph（图表测量），与 VTB 无关。**
+> 依据：`MainRun.cpp CreateGraph1(:2556) / CreateGraph2(:2936)` → `ComputeSuppleResult`（`MainRun.cpp:2723`）。
+
+| 控件 | OLD 实现位置 | 语义 |
+|---|---|---|
+| 函数列表（0-Sum pixels / 1-width / 2-height(TBD) / 3-differenct neighbour / 4-(TBD)） | `MainRun.cpp:2723 ComputeSuppleResult`，由 `CreateGraph1/2` 每 record 调用 | 测量方法选择：0=选区内黑/白像素计数；1=黑/白水平跨度（\|右-左\|+1）；2=空实现(TBD)；3=选区内水平+垂直相邻差分>阈值累加（封顶 65535）。注意只有 method 3 用二值化阈值，0-2 传 0 |
+| Mul-X 按钮+编辑框（1098,283） | — | **原版死控件（无任何 handler，TBD）** |
+| ABS (Graph1 - Graph2)（1097,299） | — | **原版死控件** |
+| 图形文件名编辑框（997,265,256） | — | **无读写代码，死编辑框**（Save Graph 缺省名 `_tempGraph` 硬编码） |
+| Load Graph...（1190,284） | `WinMain.cpp:2014` | .GPH 文件对话框 → CopyFile 到 `GraphFiles\` → 文件名追加进**隐藏**名单（`IDC_EDIT_AREA_LIST` 998,223，`NOT WS_VISIBLE`）→ `DisplayGraphs` 立即显示 |
+| Save Graph（1190,299） | `WinMain.cpp:1980` | 当前序列写 `<GraphFiles>\<名>.GPH`（名空则 `_tempGraph`）；格式 = `USHORT head[100]`（[0]=tabNo、[1-4]=start/range、[5]=s、[6]=count1、[7]=count2、[8]=drawBlack）+ series1[2300] + series2[2300]，共 **9400B**（`MAX_DATA=2300`，MAIN.H:92） |
+| Clear（1098,326） | `WinMain.cpp:2058` | 清空隐藏名单 |
+| Graph (Combine)（1172,325） | `WinMain.cpp:2061` → `DisplayGraphs`（:3153） | 名单内全部 .GPH 逐文件 `combineDatas[jj] += dataValues[jj]` 累加后显示；count1/count2 不一致报 `Cannot operate on different count file` |
+
+Web 映射（2026-09-03 已 1:1 重建）：函数列表 → `/api/graph/make` 的 `result_method`；Load/Save → `/api/graph/gph-load|gph-save`（原版二进制格式）；Combine → 前端逐点累加；Mul-X/ABS 按原版行为"无实现"，点击提示 TBD 并在面板内附说明。
 
 ---
 
