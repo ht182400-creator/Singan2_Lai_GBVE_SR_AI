@@ -32,6 +32,7 @@ import LogViewer from './components/LogViewer.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
 import GraphResultPanel from './components/GraphResultPanel.jsx';
 import AtbPanel from './components/AtbPanel.jsx';
+import FileBrowser from './components/FileBrowser.jsx';
 import GasotiPanel from './components/GasotiPanel.jsx';
 import VtbPanel from './components/VtbPanel.jsx';
 import RC from './components/RC.jsx';
@@ -41,6 +42,7 @@ import GraphViewOverlay from './components/GraphViewOverlay.jsx';
 import {
   openSession, getImage, analyzeByPath, analyzeBatchByPath, runImageOps, makeGraph, getSmallImage,
   getChannelFrames, parseZfile, uploadDat, getBackendLog, parseBackendLog,
+  loadAtb, atbArea, atbUpdate, loadCtb,
 } from './api.js';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,11 @@ const SUB_LABELS = [
 const DEFAULT_DAT = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\2A_DA_111017_115542.dat';
 const DEFAULT_ZFILE = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\ZAR\\X_ATB_ZAR_132006050001.txt';
 const DEFAULT_WTABLE = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\GBV_DIV_H.bin';
+// ATB / CTB 默认样本（复刻 OLD LoadATB / Load Size... 的文件选择，ZAR 样本与 OLD 一致）
+const ATB_DEFAULT_BIN = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\ZAR\\X_ATB_ZAR_132006050001.bin';
+const ATB_DEFAULT_CTB = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\ZAR\\X_CTB_ZAR_131601260001_BV100.bin';
+// Show All 四色轮换（复刻 OLD OnDrawPaint：ii%4 -> 红/绿/黄/品红）
+const ATB_COLORS = ['rgb(255,0,0)', 'rgb(0,255,0)', 'rgb(255,255,0)', 'rgb(255,0,255)'];
 // 批量分析取样数上限（仅作极端保护，正常 = 本文件 record 数；MFC 为一次性全量返回）
 const STATISTICS_MAX_RECORDS = 200000;
 
@@ -114,12 +121,17 @@ export default function App() {
   const [grnOffset, setGrnOffset] = useState(128);
   const [coordInfo, setCoordInfo] = useState(null);
 
-  // ATB 面板 state（最右侧独立区）
-  const [atbFile, setAtbFile] = useState('atb_file.atb');
-  const [atbVer, setAtbVer] = useState('TH1');
-  const [atbList] = useState(['ATB_001', 'ATB_002', 'ATB_003', 'ATB_004', 'ATB_005', 'ATB_006', 'ATB_007']);
-  const [atbSel, setAtbSel] = useState(-1);
-  const [atbRadio, setAtbRadio] = useState(0);
+  // ATB 面板 state（1:1 复刻 OLD ATB 区，rc 917,4）
+  const [atbPath, setAtbPath] = useState(ATB_DEFAULT_BIN);     // 当前 ATB 文件路径（OLD global_ATB_edit_file）
+  const [atbInfo, setAtbInfo] = useState(null);                // { isSru, areaNames[128], areaCount }
+  const [atbAreaIdx, setAtbAreaIdx] = useState(0);             // 当前 area（OLD IDC_COMBO_ATB_TYPE）
+  const [atbLines, setAtbLines] = useState([]);                // 条目文本行（OLD IDC_LIST_ATB）
+  const [atbBytes, setAtbBytes] = useState(null);              // 当前 area 原始条目字节（entries*8）
+  const [atbSel, setAtbSel] = useState(-1);                    // 选中条目（OLD LB_GETCURSEL）
+  const [atbTh, setAtbTh] = useState(0);                       // TH1-4 单选（OLD GetSelectTHValue）
+  const [atbOverlay, setAtbOverlay] = useState(null);          // Show All 叠加矩形（IR1 上绘制）
+  const [sizeNotes, setSizeNotes] = useState([]);              // CTB note 尺寸列表（OLD IDC_COMBO_DENOS_SIZE）
+  const [sizeIdx, setSizeIdx] = useState(0);                   // 选中 note 尺寸
 
   // ---- 全局缩放（拖右下角手柄缩放，内容等比放大/缩小）----
   const BASE_W = 2400; // .main-window 基准宽度（styles.css 一致，2026-09-03 左侧扩宽 200 → 2200→2400）
@@ -940,6 +952,198 @@ export default function App() {
     pushHistory(`Mouse Point 拖选 → ${w}×${h} @ (${sel.x1},${sel.y1})`);
   }, [ir1Img, pushHistory]);
 
+  // ==================== ATB（1:1 复刻 OLD WinMain.cpp ATB 区）====================
+  // 取当前 area 第 entry 条目的 8 字节 [x,y,w,h,th1..th4]
+  const atbEntryBytes = useCallback((entry) => {
+    if (!atbBytes || entry < 0 || (entry + 1) * 8 > atbBytes.length) return null;
+    return Array.from(atbBytes.slice(entry * 8, entry * 8 + 8));
+  }, [atbBytes]);
+
+  // 文件选择对话框当前打开的目标：null | 'atb'（Load...）| 'ctb'（Load Size...）
+  const [atbBrowser, setAtbBrowser] = useState(null);
+
+  // Load...（复刻 OLD IDC_BUTTON_LOAD_ATB -> LoadATB：读文件、填 area 名单与 area#0 列表）
+  const doAtbLoad = useCallback(async (p) => {
+    if (!p) return;
+    try {
+      const res = await loadAtb({ path: p });
+      setAtbPath(p);
+      setAtbInfo({ isSru: res.isSru, areaNames: res.areaNames, areaCount: res.areaCount });
+      setAtbAreaIdx(0);
+      setAtbLines(res.lines);
+      setAtbBytes(Uint8Array.from(res.bytes));
+      setAtbSel(-1);
+      setAtbOverlay(null);
+      pushHistory(`ATB Load: ${p.split(/[\\/]/).pop()}${res.isSru ? ' (SRU)' : ''}`);
+    } catch (e) {
+      pushHistory(`ATB Load 失败: ${e.message}`);
+    }
+  }, [pushHistory]);
+
+  // Load... 按钮：打开文件浏览对话框（等价 OLD GetOpenFileName，*.bin）
+  const handleAtbLoad = useCallback(() => setAtbBrowser('atb'), []);
+
+  // area 切换（复刻 OLD IDC_COMBO_ATB_TYPE CBN_SELCHANGE -> SetDefaultATBList）
+  const handleAtbArea = useCallback(async (idx) => {
+    try {
+      const res = await atbArea({ index: idx });
+      setAtbAreaIdx(idx);
+      setAtbLines(res.lines);
+      setAtbBytes(Uint8Array.from(res.bytes));
+      setAtbSel(-1);
+    } catch (e) {
+      pushHistory(`ATB 切换 area 失败: ${e.message}`);
+    }
+  }, [pushHistory]);
+
+  // 更新条目公共路径（服务端更新缓存 + 整表写回文件，复刻 OLD fwrite 回写）
+  const atbWriteEntry = useCallback(async (entry, bytes8, label) => {
+    try {
+      const res = await atbUpdate({ area: atbAreaIdx, entry, bytes: bytes8 });
+      setAtbLines(res.lines);
+      setAtbBytes(Uint8Array.from(res.bytes));
+      pushHistory(`ATB ${label}: area ${atbAreaIdx + 1} entry ${entry + 1} -> [${bytes8.join(',')}]`);
+    } catch (e) {
+      pushHistory(`ATB ${label} 失败: ${e.message}`);
+    }
+  }, [atbAreaIdx, pushHistory]);
+
+  // Show（复刻 OLD IDC_BUTTON_DISPLAY_ATB_SELECT：选区移到条目矩形，阈值框取该 TH 字节）
+  const handleAtbShow = useCallback(() => {
+    const b = atbEntryBytes(atbSel);
+    if (!b) return;
+    setMousePos({ x: b[0], y: b[1] });
+    setMouseSize({ w: b[2], h: b[3] });
+    setThreshold(b[4 + atbTh]); // OLD: IDC_NITI_SIKI_BOX = 选中 TH 的阈值字节
+    pushHistory(`ATB Show: entry ${atbSel + 1} -> (${b[0]},${b[1]}) ${b[2]}×${b[3]} TH${atbTh + 1}=${b[4 + atbTh]}`);
+  }, [atbEntryBytes, atbSel, atbTh, pushHistory]);
+
+  // Show All（复刻 OLD IDC_BUTTON_ATB_SHOW_ALL + OnDrawPaint：按 TH 面画全部 note 矩形，4 色轮换）
+  const handleAtbShowAll = useCallback(() => {
+    if (atbOverlay) {
+      setAtbOverlay(null);
+      pushHistory('ATB Show All: OFF');
+      return;
+    }
+    const entries = atbBytes ? atbBytes.length / 8 : 0;
+    const notes = Math.floor(entries / 4); // 128（普通）/ 256（SRU）
+    const rects = [];
+    for (let ii = 0; ii < notes; ii++) {
+      const b = atbEntryBytes(ii * 4 + atbTh); // OLD: entry = ii*4 + faceToShow
+      if (!b || (b[2] === 0 && b[3] === 0)) continue; // OLD: w==0 且 h==0 跳过
+      rects.push({
+        x: b[0], y: b[1], w: b[2], h: b[3],
+        color: ATB_COLORS[ii % 4],
+        label: `${ii + 1}${'ABCD'[atbTh]}`,
+      });
+    }
+    setAtbOverlay(rects);
+    pushHistory(`ATB Show All: ${rects.length} 矩形 (TH${atbTh + 1})`);
+  }, [atbOverlay, atbBytes, atbTh, atbEntryBytes, pushHistory]);
+
+  // Clear（复刻 OLD IDC_BUTTON_ATB_CLEAR：所选条目 8 字节清零 + 确认 + 写回文件）
+  const handleAtbClear = useCallback(() => {
+    if (atbSel < 0 || !atbEntryBytes(atbSel)) return;
+    if (!window.confirm(`Sure?\nArea no ${atbAreaIdx + 1}\nClear entry ${atbSel + 1}?`)) return;
+    atbWriteEntry(atbSel, [0, 0, 0, 0, 0, 0, 0, 0], 'Clear');
+  }, [atbSel, atbAreaIdx, atbEntryBytes, atbWriteEntry]);
+
+  // Clear 4D（复刻 OLD IDC_BUTTON_ATB_CLEAR_4_DIR：仅允许 A 面（%4==0），清 A/B/C/D 四方向）
+  const handleAtbClear4D = useCallback(() => {
+    if (atbSel < 0) return;
+    if (atbSel % 4 !== 0) {
+      window.alert('Please select A dirction for set 4 dirs!');
+      return;
+    }
+    if (!window.confirm(`Sure?\nArea no ${atbAreaIdx + 1}\nClear 4 dirs from entry ${atbSel + 1}?`)) return;
+    (async () => {
+      for (let k = 0; k < 4; k++) {
+        await atbWriteEntry(atbSel + k, [0, 0, 0, 0, 0, 0, 0, 0], `Clear4D-${'ABCD'[k]}`);
+      }
+    })();
+  }, [atbSel, atbAreaIdx, atbWriteEntry]);
+
+  // Save...（复刻 OLD IDC_BUTTON_ATB_UPDATE：用当前鼠标选区 + 阈值框写所选条目）
+  const handleAtbSave = useCallback(() => {
+    const b = atbEntryBytes(atbSel);
+    if (!b || !mousePos) return;
+    const nb = [...b];
+    nb[0] = mousePos.x; nb[1] = mousePos.y;
+    nb[2] = mouseSize.w; nb[3] = mouseSize.h;
+    nb[4 + atbTh] = threshold; // OLD: updateBytes[4+selectIndex] = s（仅写当前 TH 位）
+    if (!window.confirm(`Sure?\nArea no ${atbAreaIdx + 1}\nupdate with [${nb.join(',')}]?`)) return;
+    atbWriteEntry(atbSel, nb, 'Save');
+  }, [atbEntryBytes, atbSel, mousePos, mouseSize, atbTh, threshold, atbAreaIdx, atbWriteEntry]);
+
+  // Set 4D...（复刻 OLD IDC_BUTTON_ATB_SET_4_DIR：A 面选区按 note 尺寸推导 B/C/D 三方向）
+  const handleAtbSet4D = useCallback(() => {
+    if (atbSel < 0) return;
+    if (atbSel % 4 !== 0) {
+      window.alert('Please select A dirction for set 4 dirs!');
+      return;
+    }
+    if (sizeNotes.length === 0) {
+      window.alert('Please run Load Size to select denos size firstly!');
+      return;
+    }
+    // 尺寸下拉文本 "Note:001 = 152 x 070" -> (length, height)
+    const m = /Note:\s*\d+\s*=\s*(\d+)\s*x\s*(\d+)/.exec(sizeNotes[sizeIdx] || '');
+    if (!m) return;
+    const denoLength = Number(m[1]);
+    const denoHeight = Number(m[2]);
+    const b = atbEntryBytes(atbSel);
+    if (!b || !mousePos) return;
+    const a = [...b];
+    a[0] = mousePos.x; a[1] = mousePos.y; a[2] = mouseSize.w; a[3] = mouseSize.h;
+    a[4 + atbTh] = threshold;
+    // OLD 公式：B=右上镜像 / C=左下 / D=右下；坐标为奇数时取偶（valueAbnormal 时中止）
+    const mk = (x, y) => {
+      let ex = x, ey = y;
+      if (ex <= 0 || ey <= 0) return null;
+      if (ex % 2 !== 0) ex -= 1;
+      if (ey % 2 !== 0) ey -= 1;
+      return [ex, ey, a[2], a[3], a[4], a[5], a[6], a[7]];
+    };
+    const bb = mk(denoLength - a[0] - a[2], denoHeight - a[1] - a[3]);
+    const cc = mk(a[0], denoHeight - a[1] - a[3]);
+    const dd = mk(denoLength - a[0] - a[2], a[1]);
+    if (!bb || !cc || !dd) {
+      window.alert('Computed area invalid (check note size vs selection)!');
+      return;
+    }
+    if (!window.confirm(`Note length=${denoLength} height=${denoHeight}\nSure?\nArea no ${atbAreaIdx + 1}\nA=[${a.join(',')}]`)) return;
+    (async () => {
+      await atbWriteEntry(atbSel, a, 'Set4D-A');
+      await atbWriteEntry(atbSel + 1, bb, 'Set4D-B');
+      await atbWriteEntry(atbSel + 2, cc, 'Set4D-C');
+      await atbWriteEntry(atbSel + 3, dd, 'Set4D-D');
+    })();
+  }, [atbSel, sizeNotes, sizeIdx, atbEntryBytes, mousePos, mouseSize, atbTh, threshold, atbAreaIdx, atbWriteEntry]);
+
+  // Load Size...（复刻 OLD IDC_BUTTON_LOAD_DENOS_SIZE -> LoadCTB：解析 note 尺寸列表）
+  const doLoadCtb = useCallback(async (p) => {
+    if (!p) return;
+    try {
+      const res = await loadCtb({ path: p });
+      setSizeNotes(res.notes);
+      setSizeIdx(0);
+      pushHistory(`Load Size: ${p.split(/[\\/]/).pop()} (${res.notes.length} notes)`);
+    } catch (e) {
+      pushHistory(`Load Size 失败: ${e.message}`);
+    }
+  }, [pushHistory]);
+
+  // Load Size... 按钮：打开文件浏览对话框（等价 OLD GetOpenFileName，*.bin）
+  const handleAtbLoadSize = useCallback(() => setAtbBrowser('ctb'), []);
+
+  // 文件浏览对话框「打开」：按目标分发到 ATB 载入或 CTB 尺寸载入
+  const handleBrowserOk = useCallback((p) => {
+    const kind = atbBrowser;
+    setAtbBrowser(null);
+    if (kind === 'atb') doAtbLoad(p);
+    else if (kind === 'ctb') doLoadCtb(p);
+  }, [atbBrowser, doAtbLoad, doLoadCtb]);
+
   // Alt+R global → Cont. Confirm dialog
   useEffect(() => {
     const onKey = (e) => {
@@ -1002,6 +1206,7 @@ export default function App() {
           showGrid={showGrid}
           box={box}
           showBox={!!box}
+          areas={atbOverlay}
           onHover={handleMouseHover}
           onClick={handleMouseClick}
           freeHand={mouseShowV}
@@ -1221,14 +1426,31 @@ export default function App() {
         </RC>
         {/* VTB 区 (rc 915,147) — resource.rc 真实存在，曾被误删 */}
         <RC id="vtb" className="rc-vtb" dl={362} dt={197}><VtbPanel pushHistory={pushHistory} /></RC>
-        {/* ATB 区 (rc 917,4) */}
+        {/* ATB 区 (rc 917,4) — 1:1 复刻 OLD ATB 控件组 */}
         <RC id="atb" className="rc-atb" dl={364} dt={5}>
           <AtbPanel
-            fileName={atbFile} setFileName={setAtbFile}
-            version={atbVer} setVersion={setAtbVer}
-            list={atbList} selected={atbSel} setSelected={setAtbSel}
-            radioMode={atbRadio} setRadioMode={setAtbRadio}
-            pushHistory={pushHistory}
+            fileName={atbPath.split(/[\\/]/).pop()}
+            areaNames={atbInfo ? atbInfo.areaNames : []}
+            areaIndex={atbAreaIdx}
+            onAreaChange={handleAtbArea}
+            lines={atbLines}
+            selected={atbSel}
+            setSelected={setAtbSel}
+            thIndex={atbTh}
+            setThIndex={setAtbTh}
+            sizeNotes={sizeNotes}
+            sizeIndex={sizeIdx}
+            setSizeIndex={setSizeIdx}
+            loaded={!!atbBytes}
+            onLoad={handleAtbLoad}
+            onShow={handleAtbShow}
+            onShowAll={handleAtbShowAll}
+            onSave={handleAtbSave}
+            onClear={handleAtbClear}
+            onClear4D={handleAtbClear4D}
+            onSet4D={handleAtbSet4D}
+            onLoadSize={handleAtbLoadSize}
+            onContextMenu={onContextMenu}
           />
         </RC>
         {/* Coordinate / Function Name File（rc 629,646）— 从底部状态栏移入右侧区，作为可拖拽 RC */}
@@ -1364,6 +1586,17 @@ export default function App() {
           error={logError}
           onClose={() => setLogViewer(null)}
           onRefresh={logViewer === 'backend' ? () => openLogViewer('backend') : null}
+        />
+      )}
+
+      {/* ATB/CTB 本地文件选择对话框（等价 OLD GetOpenFileName） */}
+      {atbBrowser && (
+        <FileBrowser
+          title={atbBrowser === 'atb' ? 'ATB File selection (*.bin)' : 'CTB File selection (*.bin)'}
+          initialPath={atbBrowser === 'atb' ? atbPath : ATB_DEFAULT_CTB}
+          ext=".bin"
+          onOk={handleBrowserOk}
+          onClose={() => setAtbBrowser(null)}
         />
       )}
 

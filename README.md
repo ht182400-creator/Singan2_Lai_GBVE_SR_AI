@@ -74,8 +74,13 @@ cmake --build build --config Debug
 | POST | `/api/graph/save` | P3 | 保存 .grp（JSON 文本） |
 | POST | `/api/graph/load` | P3 | 读取 .grp |
 | POST | `/api/zfile/parse` | P4 | 解析坐标文件（shift_jis） |
-| POST | `/api/atb/load` | P4 | 加载 ATB |
+| POST | `/api/atb/load` | P4 | 加载 ATB（SRU 自动探测），返回 area 名单 + area#0 列表与原始字节 |
+| POST | `/api/atb/area` | P4 | 切换 ATB area（对应原版类型下拉） |
+| POST | `/api/atb/update` | P4 | 更新 ATB 条目（8 字节）并整表写回文件（SRU 保留原 32B 头） |
+| POST | `/api/atb/ctb` | P4 | 解析 CTB 面额尺寸列表（Load Size...） |
+| GET  | `/api/fs/list` | P4 | 本地目录列表（`?path=&ext=`），供前端文件选择对话框（等价 GetOpenFileName） |
 | POST | `/api/vtb/load` | P4 | 加载 VTB |
+| GET  | `/api/debug-log` | — | 读取后端调试日志 `singan2_debug.log`（供前端日志查看器） |
 | POST | `/api/export/csv` | P5 | 导出 CSV |
 | POST | `/api/config/save` | P5 | 保存配置 |
 | POST | `/api/config/load` | P5 | 读取配置 |

@@ -73,7 +73,7 @@ function fakeHistBars() {
 export default function ImagePane({
   title, height, small, withHist = true, onContextMenu, imageData, showGrid = false,
   box, showBox = false, onHover, onClick, freeHand = false, onSelect, onSizeChange,
-  onFileDrop,
+  onFileDrop, areas,
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -260,6 +260,23 @@ export default function ImagePane({
           {showGrid && (
             <div className="image-pane-grid" aria-hidden="true" />
           )}
+          {/* Show All 叠加层：ATB 各 note 矩形（4 色轮换 + "noteA" 标签，复刻 OLD OnDrawPaint；
+              OLD 中选区白框与 area 彩框同时绘制，故不受 showSel 影响） */}
+          {Array.isArray(areas) && areas.length > 0 && pixels && areas.map((a, i) => (
+            <div
+              key={`${a.label}-${i}`}
+              className="image-pane-atb-rect"
+              style={{
+                left: `${(a.x / W) * 100}%`,
+                top: `${(a.y / H) * 100}%`,
+                width: `${(a.w / W) * 100}%`,
+                height: `${(a.h / H) * 100}%`,
+                borderColor: a.color,
+              }}
+            >
+              <span className="image-pane-atb-label" style={{ color: a.color }}>{a.label}</span>
+            </div>
+          ))}
           {/* 红十字线（全宽/全高）+ 白色框；自由手拖拽中额外画青色十字格线 */}
           {showSel && (
             <>

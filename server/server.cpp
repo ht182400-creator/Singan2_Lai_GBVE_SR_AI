@@ -4,6 +4,7 @@
 // 端点总览（P0–P5 模块功能同步，详见 docs/11_模块功能同步方案_P0-P5.md）：
 //   GET  /health                    健康检查
 //   GET  /api/debug-log             读取 singan2_debug.log 文本（供前端日志查看器，按模块/级别彩色展示）
+//   GET  /api/fs/list               ?path=<dir|file>&ext=.bin       -> {path,parent,dirs[],files[]}（本地文件选择）
 //   -- P0 基础数据链路 --
 //   POST /api/session/open          {dat_path}                     -> {record_count, wave_count, waves[]}
 //   POST /api/image                 {dat_path,record,wave,mode,...}-> {width,height,encoding,min,max,data(base64)}
@@ -19,7 +20,10 @@
 //   POST /api/graph/save|load       {path[,series]}
 //   -- P4 ATB / VTB / 坐标 --
 //   POST /api/zfile/parse           {path,encoding}                -> {areas[]}
-//   POST /api/atb/load              {path}                          [需补移植：ATB 二进制格式需反推]
+//   POST /api/atb/load              {path}                          -> {isSru,areaNames[],lines[],bytes[]}
+//   POST /api/atb/area              {index}                         -> {lines[],bytes[]}（切 area）
+//   POST /api/atb/update            {area,entry,bytes[8]}           -> 更新条目并整表写回文件
+//   POST /api/atb/ctb               {path}                          -> {notes[]}（Load Size... 的 CTB 尺寸列表）
 //   POST /api/vtb/load              {path}                          -> {modes[6].processes[8].commands[]}
 //   -- P5 保存与配置 --
 //   POST /api/export/csv            {path,header,rows}
@@ -761,6 +765,155 @@ static void debug_log(const std::string& msg) {
     }
 }
 
+// ============ ATB（复刻 OLD WinMain.cpp LoadATB / SetDefaultATBList / LoadCTB）============
+// 文件格式：普通 = 128 area × 512 条目 × 8B（无头）；SRU = 32B 头("SRU") + 256 area × 1024 条目 × 8B。
+// 条目 8 字节 = [x, y, w, h, th1, th2, th3, th4]；条目序号 ii：方向 = ii%4(A/B/C/D)，note 号 = ii/4+1。
+static const int ATB_AREAS = 128;         // 普通 ATB 区域数（OLD global_ATBS[128]）
+static const int ATB_ENTRIES = 512;       // 普通 ATB 每 area 条目数
+static const int ATB_SRU_AREAS = 256;     // SRU ATB 区域数
+static const int ATB_SRU_ENTRIES = 1024;  // SRU ATB 每 area 条目数
+static const int ATB_ENTRY_BYTES = 8;     // 每条目字节数
+static const int ATB_SRU_HEADER = 32;     // SRU 文件头长度（OLD MAIN.H SRU_HEADER_SIZE）
+
+static std::mutex g_atb_mutex;            // 保护下方 ATB 缓存状态
+static std::vector<uint8_t> g_atb_table;  // 全部 area 的连续字节（areas*entries*8）
+static std::vector<uint8_t> g_atb_header; // SRU 头原文（写回时原样保留）
+static bool g_atb_sru = false;            // 是否 SRU 文件（OLD is_sru_ATB）
+static std::string g_atb_path;            // 当前编辑文件路径（OLD global_ATB_edit_file）
+
+// 区域名（复刻 OLD GetATBAreaName：%4X 为区域基址 0x4000 起）
+static std::string atb_area_name(int no) {
+    char buf[100];
+    const int base = 0x4000;
+    if (no == 1) snprintf(buf, sizeof(buf), "%4X WM1", base + no - 1);
+    else if (no == 2) snprintf(buf, sizeof(buf), "%4X WM2", base + no - 1);
+    else if (no == 3) snprintf(buf, sizeof(buf), "%4X Thread", base + no - 1);
+    else if (no == 4) snprintf(buf, sizeof(buf), "%4X IR1", base + no - 1);
+    else if (no == 5) snprintf(buf, sizeof(buf), "%4X IR2", base + no - 1);
+    else if (no == 6) snprintf(buf, sizeof(buf), "%4X IR3", base + no - 1);
+    else if (no == 7) snprintf(buf, sizeof(buf), "%4X Dirt", base + no - 1);
+    else if (no == 8) snprintf(buf, sizeof(buf), "%4X Hologram", base + no - 1);
+    else if (no == 9) snprintf(buf, sizeof(buf), "%4X WM(20x20)", base + no - 1);
+    else if (no <= 19) snprintf(buf, sizeof(buf), "%4X ETC-%3d", base + no - 1, no - 9);
+    else snprintf(buf, sizeof(buf), "%4X ETC-%3d Sup-%3d", base + no - 1, no - 9, no - 19);
+    return buf;
+}
+
+// 列表行（复刻 OLD SetDefaultATBList 的格式串，前端与文件字节一一对应）
+static std::string atb_line(int idx, const uint8_t* e) {
+    static const char dir[5] = "ABCD";
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%03d %03d%c: %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d",
+             idx + 1, idx / 4 + 1, dir[idx % 4],
+             e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7]);
+    return buf;
+}
+
+// 从原始 JSON 数组文本解析 int（"bytes":[1,2,...]），容错空白
+static std::vector<int> json_parse_int_array(const std::string& raw) {
+    std::vector<int> out;
+    std::string num;
+    for (char c : raw) {
+        if ((c >= '0' && c <= '9') || c == '-') num += c;
+        else if (!num.empty()) { out.push_back(std::stoi(num)); num.clear(); }
+    }
+    if (!num.empty()) out.push_back(std::stoi(num));
+    return out;
+}
+
+// 生成某个 area 的 lines + bytes JSON（调用方必须已持有 g_atb_mutex）
+static std::string atb_area_json_locked(int area, int entries) {
+    const uint8_t* base = g_atb_table.data() + (size_t)area * entries * ATB_ENTRY_BYTES;
+    std::string lines = "[";
+    std::string bytes = "[";
+    for (int i = 0; i < entries; i++) {
+        if (i) { lines += ","; bytes += ","; }
+        lines += "\"" + json_escape(atb_line(i, base + (size_t)i * ATB_ENTRY_BYTES)) + "\"";
+        for (int b = 0; b < ATB_ENTRY_BYTES; b++) {
+            bytes += std::to_string(base[(size_t)i * ATB_ENTRY_BYTES + b]);
+            if (b < ATB_ENTRY_BYTES - 1) bytes += ",";
+        }
+    }
+    lines += "]";
+    bytes += "]";
+    return "{\"area\":" + std::to_string(area) +
+           ",\"entries\":" + std::to_string(entries) +
+           ",\"lines\":" + lines + ",\"bytes\":" + bytes + "}";
+}
+
+// POST /api/atb/load 响应体：读文件 + 缓存全表 + 返回 area 名单与 area#0 列表
+static std::string atb_load_json(const std::string& path) {
+    std::ifstream fp(path, std::ios::binary);
+    if (!fp.is_open()) throw std::runtime_error("Load ATB failed! " + path);
+    std::vector<uint8_t> raw((std::istreambuf_iterator<char>(fp)), std::istreambuf_iterator<char>());
+    fp.close();
+    if (raw.size() < 3) throw std::runtime_error("ATB 文件过小: " + path);
+
+    const bool sru = raw[0] == 'S' && raw[1] == 'R' && raw[2] == 'U'; // OLD CFileAccess::IsSRUFile
+    const size_t headerLen = sru ? (size_t)ATB_SRU_HEADER : 0;
+    const size_t areas = sru ? ATB_SRU_AREAS : ATB_AREAS;
+    const size_t entries = sru ? ATB_SRU_ENTRIES : ATB_ENTRIES;
+    const size_t need = areas * entries * ATB_ENTRY_BYTES;
+    if (raw.size() < headerLen + need) throw std::runtime_error("ATB 文件不完整: " + path);
+
+    std::lock_guard<std::mutex> lk(g_atb_mutex);
+    g_atb_sru = sru;
+    g_atb_path = path;
+    if (sru) g_atb_header.assign(raw.begin(), raw.begin() + headerLen);
+    else g_atb_header.clear();
+    g_atb_table.assign(raw.begin() + headerLen, raw.begin() + headerLen + need);
+
+    // area 名单（OLD LoadATB 固定填 128 项，普通/SRU 通用）
+    std::string names = "[";
+    for (int i = 1; i <= ATB_AREAS; i++) {
+        if (i > 1) names += ",";
+        names += "\"" + json_escape(atb_area_name(i)) + "\"";
+    }
+    names += "]";
+    std::string inner = atb_area_json_locked(0, (int)entries).substr(1); // 去掉开头 '{'
+    return "{\"path\":\"" + json_escape(path) +
+           "\",\"isSru\":" + (sru ? "true" : "false") +
+           ",\"areaCount\":" + std::to_string(areas) +
+           ",\"areaNames\":" + names + "," + inner;
+}
+
+// POST /api/atb/ctb 响应体（复刻 OLD LoadCTB 的解析）
+static std::string atb_ctb_json(const std::string& path) {
+    std::ifstream fp(path, std::ios::binary);
+    if (!fp.is_open()) throw std::runtime_error("Load CTB failed! " + path);
+    std::vector<uint8_t> raw((std::istreambuf_iterator<char>(fp)), std::istreambuf_iterator<char>());
+    fp.close();
+    const bool sru = raw.size() >= 3 && raw[0] == 'S' && raw[1] == 'R' && raw[2] == 'U';
+    const size_t off = sru ? (size_t)ATB_SRU_HEADER : 0;
+    // arrayOffsetCTB[256]：UINT32 × 256（小端）；denoNo = off[4] - off[3]
+    if (off + 256 * 4 > raw.size()) throw std::runtime_error("CTB 文件不完整: " + path);
+    auto u32 = [&](size_t i) {
+        const size_t p = off + i * 4;
+        return (uint32_t)raw[p] | ((uint32_t)raw[p + 1] << 8) |
+               ((uint32_t)raw[p + 2] << 16) | ((uint32_t)raw[p + 3] << 24);
+    };
+    const uint32_t o3 = u32(3), o4 = u32(4);
+    if (o4 < o3) throw std::runtime_error("CTB 偏移异常: " + path);
+    uint32_t denoNo = o4 - o3;
+    if (denoNo > 256) denoNo = 256; // OLD noteLengthCTB/noteHeightCTB 上限 256
+    const size_t dataOff = off + 256 * 4 + (size_t)o3 * 2;
+    if (dataOff + (size_t)denoNo * 4 > raw.size()) throw std::runtime_error("CTB 文件不完整: " + path);
+
+    // 布局：heights[denoNo] 后跟 lengths[denoNo]（OLD 两次 fread 的顺序）
+    std::string notes = "[";
+    for (uint32_t i = 0; i < denoNo; i++) {
+        const size_t p = dataOff + (size_t)i * 2;
+        const uint16_t h = (uint16_t)(raw[p] | (raw[p + 1] << 8));
+        const uint16_t w = (uint16_t)(raw[p + denoNo * 2] | (raw[p + denoNo * 2 + 1] << 8));
+        if (i) notes += ",";
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Note:%03d = %03d x %03d", i + 1, w, h); // OLD LoadCTB 格式
+        notes += std::string("\"") + buf + "\"";
+    }
+    notes += "]";
+    return "{\"path\":\"" + json_escape(path) + "\",\"notes\":" + notes + "}";
+}
+
 int main(int argc, char** argv) {
     int port = 8080;
     if (argc > 1) {
@@ -784,6 +937,55 @@ int main(int argc, char** argv) {
 
     svr.Get("/health", [](const httplib::Request&, httplib::Response& res) {
         send_ok(res, "{\"status\":\"ok\"}");
+    });
+
+    // 本地文件浏览：供前端「Load... / Load Size...」选择新文件（浏览器拿不到本地绝对路径，
+    // 由 server 代为列目录，等价 OLD GetOpenFileName）。path 可为目录或文件（文件取其所在目录）。
+    // GET /api/fs/list?path=<dir|file>&ext=.bin -> { path, parent, dirs[], files[] }
+    svr.Get("/api/fs/list", [](const httplib::Request& req, httplib::Response& res) {
+        set_cors(res);
+        try {
+            const std::string path = req.has_param("path") ? req.get_param_value("path") : "";
+            std::string ext = req.has_param("ext") ? req.get_param_value("ext") : "";
+            for (auto& c : ext) c = (char)::tolower((unsigned char)c); // 后缀过滤统一小写
+
+            std::filesystem::path p = path.empty()
+                ? std::filesystem::current_path()
+                : std::filesystem::path(path);
+            std::error_code ec;
+            if (!std::filesystem::exists(p, ec)) {
+                send_err(res, 404, "path 不存在: " + path);
+                return;
+            }
+            if (std::filesystem::is_regular_file(p, ec)) p = p.parent_path();
+
+            std::string dirs = "[", files = "[";
+            for (std::filesystem::directory_iterator it(p, ec), end; it != end; it.increment(ec)) {
+                if (ec) break;
+                const std::string name = it->path().filename().string();
+                if (!name.empty() && name[0] == '.') continue; // 跳过隐藏项
+                std::error_code ec2;
+                if (it->is_directory(ec2)) {
+                    if (dirs.size() > 1) dirs += ",";
+                    dirs += "\"" + json_escape(name) + "\"";
+                } else {
+                    std::string low = name;
+                    for (auto& c : low) c = (char)::tolower((unsigned char)c);
+                    if (!ext.empty() &&
+                        (low.size() < ext.size() ||
+                         low.compare(low.size() - ext.size(), ext.size(), ext) != 0)) continue;
+                    if (files.size() > 1) files += ",";
+                    files += "\"" + json_escape(name) + "\"";
+                }
+            }
+            dirs += "]";
+            files += "]";
+            send_ok(res, std::string("{\"path\":\"") + json_escape(p.string()) +
+                     "\",\"parent\":\"" + json_escape(p.parent_path().string()) +
+                     "\",\"dirs\":" + dirs + ",\"files\":" + files + "}");
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
     });
 
     // 读取后端 C++ 调试日志（singan2_debug.log），供前端日志查看器预览。
@@ -1692,8 +1894,97 @@ int main(int argc, char** argv) {
 
     svr.Post("/api/atb/load", [](const httplib::Request& req, httplib::Response& res) {
         std::string path = json_get_str(req.body, "path", "");
-        send_ok(res, std::string("{\"path\":\"") + json_escape(path) +
-                         "\",\"items\":[],\"note\":\"[需补移植] ATB 二进制格式(OLD 未提供 CTemplateATB，需由 X_ATB_*.txt 对照 X_ATB_*.bin 反推)\"}");
+        if (path.empty()) {
+            send_err(res, 400, "path 必填");
+            return;
+        }
+        try {
+            send_ok(res, atb_load_json(path));
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
+    });
+
+    // 切换 area（复刻 OLD IDC_COMBO_ATB_TYPE CBN_SELCHANGE -> SetDefaultATBList）
+    svr.Post("/api/atb/area", [](const httplib::Request& req, httplib::Response& res) {
+        int index = json_get_int(req.body, "index", 0);
+        try {
+            std::lock_guard<std::mutex> lk(g_atb_mutex);
+            if (g_atb_table.empty()) {
+                send_err(res, 400, "ATB 未加载，请先 Load...");
+                return;
+            }
+            int entries = g_atb_sru ? ATB_SRU_ENTRIES : ATB_ENTRIES;
+            int area = index < 0 ? 0 : index;
+            send_ok(res, atb_area_json_locked(area, entries));
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
+    });
+
+    // 更新条目并写回文件（复刻 OLD Save/Update、Clear、Clear 4D、Set 4D 的公共写回路径）
+    // body: { area, entry, bytes:[8] }；entry 为 area 内条目序号（0 起）
+    svr.Post("/api/atb/update", [](const httplib::Request& req, httplib::Response& res) {
+        int area = json_get_int(req.body, "area", 0);
+        int entry = json_get_int(req.body, "entry", -1);
+        std::string raw = json_get_raw(req.body, "bytes");
+        try {
+            // 解析 8 字节数组（对应 OLD updateBytes / updateBytesDirB/C/D）
+            std::vector<int> vals = json_parse_int_array(raw);
+            if ((int)vals.size() != ATB_ENTRY_BYTES) {
+                send_err(res, 400, "bytes 必须为 8 个整数");
+                return;
+            }
+            std::lock_guard<std::mutex> lk(g_atb_mutex);
+            if (g_atb_table.empty()) {
+                send_err(res, 400, "ATB 未加载，请先 Load...");
+                return;
+            }
+            int areas = g_atb_sru ? ATB_SRU_AREAS : ATB_AREAS;
+            int entries = g_atb_sru ? ATB_SRU_ENTRIES : ATB_ENTRIES;
+            if (area < 0 || area >= areas || entry < 0 || entry >= entries) {
+                send_err(res, 400, "area/entry 越界");
+                return;
+            }
+            uint8_t* dst = g_atb_table.data() + (size_t)area * entries * ATB_ENTRY_BYTES
+                           + (size_t)entry * ATB_ENTRY_BYTES;
+            for (int i = 0; i < ATB_ENTRY_BYTES; i++) dst[i] = (uint8_t)(vals[i] & 0xFF);
+
+            // 整表写回（SRU 文件先写回原 32 字节头，与 OLD fwrite(SRU_FILE_HEADER_ATB) 一致）
+            std::ofstream fp(g_atb_path, std::ios::binary | std::ios::trunc);
+            if (!fp.is_open()) {
+                send_err(res, 500, "Cannot Write File!! " + g_atb_path);
+                return;
+            }
+            if (g_atb_sru && !g_atb_header.empty()) {
+                fp.write(reinterpret_cast<const char*>(g_atb_header.data()),
+                         (std::streamsize)g_atb_header.size());
+            }
+            fp.write(reinterpret_cast<const char*>(g_atb_table.data()),
+                     (std::streamsize)g_atb_table.size());
+            fp.close();
+
+            std::string body = atb_area_json_locked(area, entries);
+            body.pop_back(); // 去掉 '}'，附加提示
+            body += ",\"written\":true}";
+            send_ok(res, body);
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
+    });
+
+    // Load Size...（复刻 OLD LoadCTB：解析 CTB 的 note 尺寸列表）
+    svr.Post("/api/atb/ctb", [](const httplib::Request& req, httplib::Response& res) {
+        std::string path = json_get_str(req.body, "path", "");
+        if (path.empty()) {
+            send_err(res, 400, "path 必填");
+            return;
+        }
+        try {
+            send_ok(res, atb_ctb_json(path));
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
     });
 
     svr.Post("/api/vtb/load", [&parse_vtb_to_json](const httplib::Request& req, httplib::Response& res) {

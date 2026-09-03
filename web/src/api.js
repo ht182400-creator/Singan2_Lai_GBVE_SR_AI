@@ -178,8 +178,40 @@ export async function parseZfile({ path, encoding = 'shift_jis' }) {
   return postJson('/api/zfile/parse', { path, encoding });
 }
 
+// 加载 ATB 二进制文件（复刻 OLD LoadATB）：
+// -> { path, isSru, areaCount, areaNames[128], area, entries, lines[], bytes[] }
+// lines 与 OLD SetDefaultATBList 格式串一致；bytes 为 area#0 的 entries*8 原始条目字节。
 export async function loadAtb({ path }) {
   return postJson('/api/atb/load', { path });
+}
+
+// 切换 area（复刻 OLD IDC_COMBO_ATB_TYPE CBN_SELCHANGE -> SetDefaultATBList）
+// -> { area, entries, lines[], bytes[] }
+export async function atbArea({ index }) {
+  return postJson('/api/atb/area', { index });
+}
+
+// 更新条目并整表写回文件（复刻 OLD Save/Update、Clear、Clear 4D、Set 4D 的公共写回路径）
+// bytes 为 8 字节 [x,y,w,h,th1..th4]；-> { area, entries, lines[], bytes[], written }
+export async function atbUpdate({ area, entry, bytes }) {
+  return postJson('/api/atb/update', { area, entry, bytes });
+}
+
+// Load Size...（复刻 OLD LoadCTB）：解析 CTB 文件的 note 尺寸列表
+// -> { path, notes[] }，notes 形如 "Note:001 = 152 x 070"
+export async function loadCtb({ path }) {
+  return postJson('/api/atb/ctb', { path });
+}
+
+// 本地文件浏览（等价 OLD GetOpenFileName；浏览器拿不到本地绝对路径，由 server 代列目录）。
+// path 可为目录或文件（文件取其所在目录）；ext 如 ".bin" 过滤文件，空则不过滤。
+// -> { path, parent, dirs[], files[] }
+export async function fsList({ path = '', ext = '' }) {
+  const q = `path=${encodeURIComponent(path)}&ext=${encodeURIComponent(ext)}`;
+  const r = await fetch(`/api/fs/list?${q}`);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
 }
 
 export async function loadVtb({ path }) {

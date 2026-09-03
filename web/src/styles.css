@@ -277,7 +277,7 @@ body {
 .rc-validation { left: 20px; top: 264px; width: 444px; padding-bottom: 40px; }        /* rc 630,216 (到 ~887) */
 /* 红框区域组件：整体紧凑上移，贴合原始 UI 相对布局 */
 .rc-gasoti { left: 19px; top: 390px; width: 453px; padding-bottom: 20px; }
-.rc-graph-file { left: 461px; top: 350px; width: 307px; }       /* 与 GASOTI 同排 */
+.rc-graph-file { left: 461px; top: 565px; width: 307px; }       /* 与 GASOTI 同排；2026-09-03 随 VTB 下移避让（VTB 新底 558） */
 /* Make Graph 容器：合并原 StatisticsRow + MakeGraphRow + GraphPlot 三个子组件 */
 .rc-make-graph { left: 20px; top: 500px; width: 520px; height: 360px; z-index: 6; display: flex; flex-direction: column; }
 .rc-make-graph .mg-params { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 3px 6px; background: #d4d0c8; border-bottom: 1px solid #888; font-size: 11px; }
@@ -303,8 +303,8 @@ body {
 .rc-th-row { left: 555px; top: 1930px; width: 525px; height: 50px; z-index: 4; }
 
 /* 原版真实存在但曾被误删的区域（resource.rc 证实） */
-.rc-vtb { left: 362px; top: 197px; width: 438px; height: 161px; }  /* rc 915,147 VTB 区 (右对齐至 800) */
-.rc-atb { left: 364px; top: 5px; width: 217px; }                /* rc 917,4 ATB 区 (181→217) */
+.rc-vtb { left: 362px; top: 297px; width: 438px; height: 261px; }  /* rc 915,147 VTB 区；2026-09-03 下移+100 给加高后的 ATB 让位，面板同步 +100 */
+.rc-atb { left: 364px; top: 5px; width: 330px; }                /* rc 917,4 ATB 区（原 181 DLU→217 过挤，用户要求放宽到 330 保证按钮文字不换行） */
 .rc-file-paths { left: 19px; top: 864px; width: 785px; height: 110px; z-index: 6; }  /* rc 629,646 Coordinate/Function Name File */
 .rc-op-history { left: 122px; top: 8px; width: 300px; z-index: 6; }  /* rc 714,6 Operation History，加宽以容纳 Table Function 下拉(原版 715,55 宽197) */
 .op-history-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px; font-size: 10px; margin-bottom: 2px; }
@@ -716,7 +716,7 @@ fieldset legend {
   font-size: 10px; padding: 1px 5px; border: 1px solid #999; background: #eee; cursor: pointer;
 }
 .vtb-proc.active { background: #0a0; color: #fff; border-color: #060; }
-.vtb-cmd-table { max-height: 150px; overflow: auto; border: 1px solid #bbb; font-size: 10px; }
+.vtb-cmd-table { max-height: 250px; overflow: auto; border: 1px solid #bbb; font-size: 10px; }
 .vtb-cmd-head, .vtb-cmd-row { display: flex; gap: 4px; padding: 1px 3px; }
 .vtb-cmd-head { background: #ddd; font-weight: bold; position: sticky; top: 0; }
 .vtb-cmd-row:nth-child(even) { background: #f6f6f6; }
@@ -1075,7 +1075,7 @@ input, select, textarea {
 .vtb-tabs { display: flex; gap: 4px; margin-bottom: 2px; }
 .vtb-tab { font-size: 10px; padding: 0 4px; border: 1px solid #888; background: #ece9d8; }
 .vtb-tab.active { background: #c0c0c0; border-style: inset; }
-.vtb-list { width: 100%; height: 72px; font-size: 10px; margin-bottom: 2px; }
+.vtb-list { width: 100%; height: 172px; font-size: 10px; margin-bottom: 2px; }
 
 /* === RightGraphArea（resource.rc y265–631） === */
 .graph-area { border: 1px solid #555; background: #d4d0c8; padding: 2px 4px; font-size: 11px; }
@@ -1166,17 +1166,43 @@ input, select, textarea {
 .val-group { margin-bottom: 3px; }
 .val-group-title { font-size: 10px; font-weight: 700; background: #9a9a9a; color: #fff; padding: 1px 3px; }
 
-/* === ATB 面板（最右侧独立区，.rc X917 起） === */
-.atb-panel { border: 1px solid #888; background: #ece9d8; padding: 4px; font-size: 10px; }
-.atb-row1 { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
-.atb-label { font-weight: 700; }
-.atb-input { flex: 1; padding: 1px 3px; font-family: monospace; font-size: 10px; }
-.atb-combo { padding: 1px; }
-.atb-row2 { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 3px; }
-.atb-row2 label { display: inline-flex; gap: 2px; align-items: center; }
+/* === ATB 面板（1:1 复刻 OLD resource.rc 917,4 区；用户要求放宽字号/间距，避免拥挤） === */
+.atb-panel { border: 1px solid #888; background: #ece9d8; padding: 3px; font-size: 12px; }
+.atb-filename { border: 1px solid #7a7a7a; background: #fff; height: 18px; line-height: 17px;
+  padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-bottom: 3px; }
+.atb-area-combo { width: 100%; font-size: 12px; padding: 0; height: 19px; margin-bottom: 2px; }
 .atb-list { margin-bottom: 3px; }
-.atb-listbox { width: 100%; font-size: 10px; }
-.atb-row3 { display: flex; flex-wrap: wrap; gap: 3px; }
+.atb-listbox { width: 100%; font-size: 11px; font-family: Consolas, monospace; height: 172px; }
+.atb-row-th { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.atb-row-th label { display: inline-flex; gap: 2px; align-items: center; white-space: nowrap; }
+.atb-row-btns { display: flex; gap: 4px; margin-bottom: 3px; }
+.atb-row-btns .btn { padding: 2px 5px; font-size: 12px; white-space: nowrap; }
+.atb-row-size { display: flex; gap: 4px; }
+.atb-size-combo { flex: 1; min-width: 0; font-size: 12px; height: 19px; padding: 0; }
+.atb-row-size .btn { font-size: 12px; white-space: nowrap; }
+
+/* === 本地文件选择对话框（等价 OLD GetOpenFileName，server /api/fs/list 代列目录） === */
+.fb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 300;
+  display: flex; align-items: center; justify-content: center; }
+.fb-dialog { width: 480px; max-width: 90vw; background: #ece9d8; border: 2px solid #555;
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.5); padding: 6px; font-size: 12px; }
+.fb-title { font-weight: 700; margin-bottom: 4px; }
+.fb-path-row { display: flex; gap: 4px; margin-bottom: 4px; }
+.fb-path { flex: 1; font-family: Consolas, monospace; font-size: 12px; padding: 1px 3px; }
+.fb-list { height: 260px; overflow-y: auto; background: #fff; border: 1px solid #7a7a7a;
+  font-family: Consolas, monospace; font-size: 12px; outline: none; }
+.fb-item { padding: 1px 4px; cursor: default; white-space: nowrap; }
+.fb-dir { color: #00c; font-weight: 700; }
+.fb-file:hover, .fb-dir:hover { background: #d8e4f8; }
+.fb-selected { background: #316ac5; color: #fff; }
+.fb-err { color: #c00; margin-top: 4px; }
+.fb-btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.fb-btns .btn { min-width: 64px; padding: 2px 8px; font-size: 12px; }
+
+/* Show All 叠加层：ATB note 矩形 + 标签（复刻 OLD OnDrawPaint 2px 彩色实线框） */
+.image-pane-atb-rect { position: absolute; border: 2px solid; pointer-events: none; }
+.image-pane-atb-label { position: absolute; left: 1px; top: 1px; font-size: 9px; font-weight: 700;
+  text-shadow: 0 0 2px #000; pointer-events: none; }
 
 /* === Graph View Overlay（Switch View 后的全幅覆盖层） === */
 .graph-view-overlay {
