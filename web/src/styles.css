@@ -807,6 +807,29 @@ fieldset legend {
 .graph-ops-help { font-size: 10px; color: #555; line-height: 1.5;
   border-top: 1px dotted #999; padding-top: 2px; }
 
+/* === Web 占位面板说明（OLD 源码无对应实现的控件组，禁用展示） === */
+.legacy-note { width: 100%; font-size: 10px; color: #8a6d00; background: #fcf3d4;
+  border: 1px dashed #c9a800; padding: 1px 4px; margin-bottom: 2px; line-height: 1.4; }
+
+/* === Infomation Display（1:1 复刻 OLD IDD_J_DLG，JProc.cpp 4 页） === */
+.info-display { min-width: 480px; }
+.info-tabs { display: flex; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; }
+.info-tab { padding: 2px 10px; font-size: 12px; border: 1px solid #888; background: #ece9d8; }
+.info-tab.active { background: #c0c0c0; border-style: inset; font-weight: 700; }
+.info-body { display: flex; flex-direction: column; gap: 4px; }
+.info-toolbar { display: flex; gap: 12px; align-items: center; font-size: 11px; flex-wrap: wrap; }
+.info-toolbar input { width: 52px; font-size: 11px; }
+.mono { font-family: Consolas, monospace; }
+.info-hex { max-height: 300px; overflow: auto; background: #fff; border: 1px solid #7a7a7a;
+  font-family: Consolas, monospace; font-size: 11px; line-height: 1.35; margin: 0; padding: 3px; }
+.info-stats { display: flex; gap: 14px; font-size: 11px; flex-wrap: wrap; }
+.info-canvas { background: #fff; border: 1px solid #7a7a7a; max-width: 100%;
+  /* flex 列容器默认 align-items:stretch 会把 canvas 横向拉伸到容器宽（倍率看起来失效），必须取消 */
+  align-self: flex-start; image-rendering: pixelated; }
+.info-empty { font-size: 12px; color: #555; padding: 8px; }
+.info-dsparm { max-height: 380px; overflow: auto; background: #fff; border: 1px solid #7a7a7a;
+  font-size: 11px; padding: 3px; }
+
 /* === Row Graph (666–726, h 60) === */
 .row-graph {
   position: absolute; left: 613px; top: 686px;
@@ -1077,13 +1100,18 @@ input, select, textarea {
 .gasoti-edit { flex: 1; min-width: 0; font-size: 10px; }
 .gasoti-area { width: 100%; height: 66px; font-size: 10px; resize: none; overflow-y: auto; overflow-x: scroll; white-space: pre; }
 
-/* === VTB 面板（resource.rc y147） === */
+/* === VTB 面板（1:1 复刻 OLD resource.rc 915-1279, y147-267） === */
 .vtb-panel { border: 1px solid #555; padding: 2px 4px; margin: 0; background: #d4d0c8; font-size: 11px; }
 .vtb-panel legend { font-size: 11px; font-weight: 700; padding: 0 4px; }
-.vtb-tabs { display: flex; gap: 4px; margin-bottom: 2px; }
-.vtb-tab { font-size: 10px; padding: 0 4px; border: 1px solid #888; background: #ece9d8; }
-.vtb-tab.active { background: #c0c0c0; border-style: inset; }
-.vtb-list { width: 100%; height: 172px; font-size: 10px; margin-bottom: 2px; }
+.vtb-tabs { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 2px; align-items: center; }
+.vtb-tab { font-size: 11px; padding: 1px 6px; border: 1px solid #888; background: #ece9d8;
+  white-space: nowrap; cursor: default; }
+.vtb-tab.active { background: #c0c0c0; border-style: inset; font-weight: 700; }
+.vtb-loadbtn { margin-left: auto; font-size: 11px; white-space: nowrap; }
+.vtb-list { width: 100%; height: 140px; font-size: 11px; font-family: Consolas, monospace;
+  margin-bottom: 2px; }
+.vtb-select-edit { width: 100%; height: 18px; font-size: 11px; font-family: Consolas, monospace;
+  padding: 0 3px; box-sizing: border-box; background: #fff; border: 1px solid #7a7a7a; }
 
 /* === RightGraphArea（resource.rc y265–631） === */
 .graph-area { border: 1px solid #555; background: #d4d0c8; padding: 2px 4px; font-size: 11px; }

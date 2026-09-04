@@ -67,6 +67,13 @@ export async function getSmallImage({ datPath, record = 0 }) {
   return postJson('/api/small-image', { dat_path: datPath, record });
 }
 
+// DSP-ARM Function 页（Information Display 第 4 页，复刻 OLD JProc.cpp dsparm_set）：
+// 读函数名文件 GBVM_DSP_ARM.txt + 小图像段 u16（OLD global_small_image[1580+j] 大端）。
+// 文件缺失时 -> { found:false, message:"Cannot find Function Name File..." }
+export async function getDsparm({ datPath, record = 0 }) {
+  return postJson('/api/dsparm', { dat_path: datPath, record });
+}
+
 // 整通道批量下发（网页「秒载 1000 张」核心）：一次取回某波段全部 record 的像素扁平缓冲，
 // 浏览器常驻为 Uint8Array 后翻帧只做内存切片、零网络。
 // 返回 { width, height, recordCount, data: Uint8Array }（data 长度 = recordCount*width*height）。

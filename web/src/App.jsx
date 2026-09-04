@@ -30,6 +30,7 @@ import { logInfo, logDebug, logError, logWarning, logModule, exportDebugLog, get
 import DialogModal from './components/DialogModal.jsx';
 import LogViewer from './components/LogViewer.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
+import InfoDisplayDialog from './components/InfoDisplayDialog.jsx';
 import GraphResultPanel from './components/GraphResultPanel.jsx';
 import AtbPanel from './components/AtbPanel.jsx';
 import FileBrowser from './components/FileBrowser.jsx';
@@ -92,6 +93,8 @@ const ATB_DEFAULT_BIN = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\
 const ATB_DEFAULT_CTB = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\ZAR\\X_CTB_ZAR_131601260001_BV100.bin';
 // .GPH 图形文件目录（OLD graphfilePath = "GraphFiles"，Save Graph 缺省名 _tempGraph）
 const GRAPH_FILES_DIR = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data\\GraphFiles';
+// 数据目录（Setting→Load→Data 的文件选择起点）
+const DATA_DIR = 'E:\\AI_Studio\\NCR_tool\\Singan2_Lai_GBVE_SR_AI\\data';
 // Show All 四色轮换（复刻 OLD OnDrawPaint：ii%4 -> 红/绿/黄/品红）
 const ATB_COLORS = ['rgb(255,0,0)', 'rgb(0,255,0)', 'rgb(255,255,0)', 'rgb(255,0,255)'];
 // 批量分析取样数上限（仅作极端保护，正常 = 本文件 record 数；MFC 为一次性全量返回）
@@ -854,7 +857,9 @@ export default function App() {
         });
         break;
       case 'restore':
+        // OLD popup 顶层 "Restore" = IDC_RUN → MainRun：重读当前 record 数据并重跑完整算法管线
         await restoreImage();
+        await runAnalysis();
         break;
       case 'mousePoint':
         setMouseShowV((v) => {
@@ -883,16 +888,21 @@ export default function App() {
         pushHistory('Detail Setting');
         break;
       case 'gradient':
-        await processImage([{ op: 'gradient', gtype: 0, amp: 1 }]);
+        // OLD IDM_GRADI：读取梯度滑条当前增益后 MainGradient（此前误用固定 amp=1）
+        await processImage([{ op: 'gradient', gtype: ipParams.gradType, amp: ipParams.gain }]);
         break;
       case 'binary':
-        await processImage([{ op: 'niti', s: 128 }]);
+        // OLD IDM_NITI_：读取二值化滑条当前阈值后 NitiMain/NitiMain2（此前误用固定 s=128）
+        await processImage([{ op: 'niti', s: threshold }]);
         break;
       case 'noise':
+        // OLD IDC_ON_JYOKYO：smooth_median
         await processImage([{ op: 'smooth' }]);
         break;
       case 'restoreImg':
+        // OLD Image Prosess→Restore = IDC_RUN → MainRun（同顶层 Restore）
         await restoreImage();
+        await runAnalysis();
         break;
       case 'switchView':
         setViewMode((m) => {
@@ -917,7 +927,7 @@ export default function App() {
       default:
         pushHistory(`CtxMenu → ${k}`);
     }
-  }, [pushHistory, restoreImage, processImage, zfilePath]);
+  }, [pushHistory, restoreImage, processImage, zfilePath, runAnalysis, ipParams, threshold]);
 
   // ---- P5 鼠标点：IR1 悬浮跟随 + 点击固定/跟随切换 + 自由手拖选（复刻 OLD MouseMove1 / L_Down / Freemove_mouse）----
   const clampMouse = useCallback((pos) => ({
@@ -1143,6 +1153,64 @@ export default function App() {
   // Load Size... 按钮：打开文件浏览对话框（等价 OLD GetOpenFileName，*.bin）
   const handleAtbLoadSize = useCallback(() => setAtbBrowser('ctb'), []);
 
+  // ==================== 顶部菜单命令分发（对照 OLD resource.rc IDR_MENU + WinMain.cpp WM_COMMAND）====================
+  // tool→History=IDC_VER(履历对话框) Finish=IDM_EXIT；View→Grid=IDM_GRID Information=IDM_JOHO
+  // Image→7 Reductions=IDM_IMG_DRAW；Setting→Setting Dialogue=IDM_S_DLG Load→Coordinate=IDM_Z；
+  // Short→Calculate all=IDM_ALL_REN(ComboRen)。ATB/Data/Create1/2/3/Country 为新版菜单，接 Web 等价能力。
+  const handleMenuCommand = useCallback((k) => {
+    switch (k) {
+      case 'history': // OLD IDC_VER：履历（History）查看器 → Web 用历史记录列表对话框
+        setActiveDialog('history');
+        break;
+      case 'finish': // OLD IDM_EXIT：SendMessage(WM_CLOSE)
+      case 'fin': // Short→Finish (Alt+F)（新版菜单）
+        setActiveDialog('finish');
+        break;
+      case 'grid': // OLD IDM_GRID：global_grid 切换
+        setShowGrid((v) => { pushHistory(`Grid ${!v ? 'ON' : 'OFF'}`); return !v; });
+        break;
+      case 'info': // OLD IDM_JOHO：IDD_J_DLG Information Display
+        setActiveDialog('info');
+        break;
+      case 'img-th': // OLD IDM_IMG_DRAW：IDD_IMG "7 Reduction Images"
+        // Web 的 Reduction Image 面板常驻右上（rc 1101,2），无需独立窗口
+        pushHistory('7 Reductions：Reduction Image 面板常驻右上侧（rc 1101,2）');
+        break;
+      case 'img-bright': // 新版菜单 Brightness Adjust → Detail Setting（R/G 增益重载当前波段）
+        setActiveDialog('setting');
+        break;
+      case 'sdialog': // OLD IDM_S_DLG：IDD_S_SET_DLG Setting Dialogue
+        setActiveDialog('setting');
+        break;
+      case 'l-coord': // OLD IDM_Z：IDD_Z_DLG Load Coordinate Dialogue
+        setActiveDialog('coordinate');
+        break;
+      case 'l-atb': // 新版菜单 Load→ATB：等价 ATB 面板 Load...
+        setAtbBrowser('atb');
+        break;
+      case 'l-data': // 新版菜单 Load→Data：选择并打开 .dat（Data1）
+        setAtbBrowser('dat');
+        break;
+      case 'c1': // OLD Create1 → global_GR[0] 落盘开关；Web 等价 Graph1 结果包含开关
+        setMgInclude1((v) => { pushHistory(`Create1 (Graph1) ${!v ? 'ON' : 'OFF'}`); return !v; });
+        break;
+      case 'c2': // OLD Create2 → global_GR[1]；Web 等价 Graph2 结果包含开关
+        setMgInclude2((v) => { pushHistory(`Create2 (Graph2) ${!v ? 'ON' : 'OFF'}`); return !v; });
+        break;
+      case 'c3': // OLD Create3 → global_GR[2]；Web 暂无对应落盘目标
+        pushHistory('Create3：Web 暂无对应功能（OLD global_GR[2] 结果落盘开关）');
+        break;
+      case 'country': // OLD Country 选择（global_SelectCountry）
+        setActiveDialog('setting');
+        break;
+      case 'calcall': // OLD IDM_ALL_REN → ComboRen：全部组合跑批 → Web 批量 Statistics
+        runStatistics(mgStart, mgStep, mgTimes);
+        break;
+      default:
+        break;
+    }
+  }, [pushHistory, setShowGrid, setAtbBrowser, setMgInclude1, setMgInclude2, runStatistics, mgStart, mgStep, mgTimes]);
+
   // ==================== Graph 操作区（复刻 OLD WinMain 1980-2065 + DisplayGraphs）====================
   // Load Graph...（IDC_BUTTON_LOAD_GRAPH）：读 .GPH（head[100]+series1/2）→ 立即显示 + 加入名单
   const doLoadGph = useCallback(async (p) => {
@@ -1160,14 +1228,15 @@ export default function App() {
     }
   }, [pushHistory]);
 
-  // 文件浏览对话框「打开」：按目标分发到 ATB / CTB / GPH 载入
+  // 文件浏览对话框「打开」：按目标分发到 ATB / CTB / GPH / Data(.dat) 载入
   const handleBrowserOk = useCallback((p) => {
     const kind = atbBrowser;
     setAtbBrowser(null);
     if (kind === 'atb') doAtbLoad(p);
     else if (kind === 'ctb') doLoadCtb(p);
     else if (kind === 'gph') doLoadGph(p);
-  }, [atbBrowser, doAtbLoad, doLoadCtb, doLoadGph]);
+    else if (kind === 'dat') handleOpen(p, 1);
+  }, [atbBrowser, doAtbLoad, doLoadCtb, doLoadGph, handleOpen]);
 
   // Load Graph... 按钮：打开 .GPH 文件选择
   const handleLoadGraphBtn = useCallback(() => setAtbBrowser('gph'), []);
@@ -1338,7 +1407,7 @@ export default function App() {
         <div className="main-window" style={{ zoom }}
           onClick={() => { setActiveMenu(null); setCtxMenu(null); }}>
         <TitleBar onResize={() => {}} />
-        <TopMenuBar activeMenu={activeMenu} setActiveMenu={setActiveMenu} setActiveDialog={setActiveDialog} pushHistory={pushHistory} />
+        <TopMenuBar activeMenu={activeMenu} setActiveMenu={setActiveMenu} onCommand={handleMenuCommand} pushHistory={pushHistory} />
         {/* 左侧区整体包裹：统一缩放 顶部按钮 + 图像 + databar（不影响右侧） */}
         <div className="left-area" style={{ zoom: leftZoom }}>
         <ChannelTab channel={channel} setChannel={handleChannel} />
@@ -1621,6 +1690,17 @@ export default function App() {
           <div>Save current results before exit?</div>
         </DialogModal>
       )}
+      {activeDialog === 'history' && (
+        // tool→History（OLD IDC_VER → IDD_RIREKI_DLG 履历对话框）：显示本次会话操作履历
+        <DialogModal title="History" actions={['Close']}
+          onAction={() => setActiveDialog(null)}
+          onClose={() => setActiveDialog(null)}>
+          <div style={{ maxHeight: 420, overflowY: 'auto', fontSize: 11, fontFamily: 'Consolas, monospace' }}>
+            {history.length === 0 && <div>(无记录)</div>}
+            {history.map((h, i) => <div key={i}>{h}</div>)}
+          </div>
+        </DialogModal>
+      )}
       {activeDialog === 'loadCoord' && (
         <DialogModal title="Load Coordinate File" actions={['Open', 'Cancel']}
           onAction={() => setActiveDialog(null)}
@@ -1636,6 +1716,20 @@ export default function App() {
         </DialogModal>
       )}
       {activeDialog === 'info' && (
+        // View→Information（OLD IDM_JOHO → IDD_J_DLG "Infomation Display"，JProc.cpp 4 页）
+        <DialogModal title="Infomation Display" actions={['Close']}
+          onAction={() => setActiveDialog(null)}
+          onClose={() => setActiveDialog(null)}>
+          <InfoDisplayDialog
+            imageData={ir1Img}
+            mousePos={mousePos}
+            mouseSize={mouseSize}
+            datPath={datPath1}
+            record={record1}
+          />
+        </DialogModal>
+      )}
+      {activeDialog === 'infoLegacy' && (
         <DialogModal title="Show Information" actions={['Close']}
           onAction={() => setActiveDialog(null)}
           onClose={() => setActiveDialog(null)}>
@@ -1689,16 +1783,18 @@ export default function App() {
         />
       )}
 
-      {/* ATB/CTB/GPH 本地文件选择对话框（等价 OLD GetOpenFileName） */}
+      {/* ATB/CTB/GPH/Data 本地文件选择对话框（等价 OLD GetOpenFileName） */}
       {atbBrowser && (
         <FileBrowser
           title={atbBrowser === 'atb' ? 'ATB File selection (*.bin)'
             : atbBrowser === 'ctb' ? 'CTB File selection (*.bin)'
+            : atbBrowser === 'dat' ? 'Data File selection (*.dat)'
             : 'File selection (*.GPH)'}
           initialPath={atbBrowser === 'atb' ? atbPath
             : atbBrowser === 'ctb' ? ATB_DEFAULT_CTB
+            : atbBrowser === 'dat' ? DATA_DIR
             : GRAPH_FILES_DIR}
-          ext={atbBrowser === 'gph' ? '.gph' : '.bin'}
+          ext={atbBrowser === 'gph' ? '.gph' : atbBrowser === 'dat' ? '.dat' : '.bin'}
           onOk={handleBrowserOk}
           onClose={() => setAtbBrowser(null)}
         />

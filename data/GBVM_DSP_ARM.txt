@@ -1,0 +1,2531 @@
+Judgement Result
+
+1 denom. A orientation : Pattern Match Result
+1 denom. B orientation : Pattern Match Result
+1 denom. C orientation : Pattern Match Result
+1 denom. D orientation : Pattern Match Result
+2 denom. A orientation : Pattern Match Result
+2 denom. B orientation : Pattern Match Result
+2 denom. C orientation : Pattern Match Result
+2 denom. D orientation : Pattern Match Result
+3 denom. A orientation : Pattern Match Result
+3 denom. B orientation : Pattern Match Result
+3 denom. C orientation : Pattern Match Result
+3 denom. D orientation : Pattern Match Result
+4 denom. A orientation : Pattern Match Result
+4 denom. B orientation : Pattern Match Result
+4 denom. C orientation : Pattern Match Result
+4 denom. D orientation : Pattern Match Result
+5 denom. A orientation : Pattern Match Result
+5 denom. B orientation : Pattern Match Result
+5 denom. C orientation : Pattern Match Result
+5 denom. D orientation : Pattern Match Result
+6 denom. A orientation : Pattern Match Result
+6 denom. B orientation : Pattern Match Result
+6 denom. C orientation : Pattern Match Result
+6 denom. D orientation : Pattern Match Result
+7 denom. A orientation : Pattern Match Result
+7 denom. B orientation : Pattern Match Result
+7 denom. C orientation : Pattern Match Result
+7 denom. D orientation : Pattern Match Result
+8 denom. A orientation : Pattern Match Result
+8 denom. B orientation : Pattern Match Result
+8 denom. C orientation : Pattern Match Result
+8 denom. D orientation : Pattern Match Result
+9 denom. A orientation : Pattern Match Result
+9 denom. B orientation : Pattern Match Result
+9 denom. C orientation : Pattern Match Result
+9 denom. D orientation : Pattern Match Result
+10 denom. A orientation : Pattern Match Result
+10 denom. B orientation : Pattern Match Result
+10 denom. C orientation : Pattern Match Result
+10 denom. D orientation : Pattern Match Result
+11 denom. A orientation : Pattern Match Result
+11 denom. B orientation : Pattern Match Result
+11 denom. C orientation : Pattern Match Result
+11 denom. D orientation : Pattern Match Result
+12 denom. A orientation : Pattern Match Result
+12 denom. B orientation : Pattern Match Result
+12 denom. C orientation : Pattern Match Result
+12 denom. D orientation : Pattern Match Result
+13 denom. A orientation : Pattern Match Result
+13 denom. B orientation : Pattern Match Result
+13 denom. C orientation : Pattern Match Result
+13 denom. D orientation : Pattern Match Result
+14 denom. A orientation : Pattern Match Result
+14 denom. B orientation : Pattern Match Result
+14 denom. C orientation : Pattern Match Result
+14 denom. D orientation : Pattern Match Result
+15 denom. A orientation : Pattern Match Result
+15 denom. B orientation : Pattern Match Result
+15 denom. C orientation : Pattern Match Result
+15 denom. D orientation : Pattern Match Result
+16 denom. A orientation : Pattern Match Result
+16 denom. B orientation : Pattern Match Result
+16 denom. C orientation : Pattern Match Result
+16 denom. D orientation : Pattern Match Result
+17 denom. A orientation : Pattern Match Result
+17 denom. B orientation : Pattern Match Result
+17 denom. C orientation : Pattern Match Result
+17 denom. D orientation : Pattern Match Result
+18 denom. A orientation : Pattern Match Result
+18 denom. B orientation : Pattern Match Result
+18 denom. C orientation : Pattern Match Result
+18 denom. D orientation : Pattern Match Result
+19 denom. A orientation : Pattern Match Result
+19 denom. B orientation : Pattern Match Result
+19 denom. C orientation : Pattern Match Result
+19 denom. D orientation : Pattern Match Result
+20 denom. A orientation : Pattern Match Result
+20 denom. B orientation : Pattern Match Result
+20 denom. C orientation : Pattern Match Result
+20 denom. D orientation : Pattern Match Result
+21 denom. A orientation : Pattern Match Result
+21 denom. B orientation : Pattern Match Result
+21 denom. C orientation : Pattern Match Result
+21 denom. D orientation : Pattern Match Result
+22 denom. A orientation : Pattern Match Result
+22 denom. B orientation : Pattern Match Result
+22 denom. C orientation : Pattern Match Result
+22 denom. D orientation : Pattern Match Result
+23 denom. A orientation : Pattern Match Result
+23 denom. B orientation : Pattern Match Result
+23 denom. C orientation : Pattern Match Result
+23 denom. D orientation : Pattern Match Result
+24 denom. A orientation : Pattern Match Result
+24 denom. B orientation : Pattern Match Result
+24 denom. C orientation : Pattern Match Result
+24 denom. D orientation : Pattern Match Result
+25 denom. A orientation : Pattern Match Result
+25 denom. B orientation : Pattern Match Result
+25 denom. C orientation : Pattern Match Result
+25 denom. D orientation : Pattern Match Result
+26 denom. A orientation : Pattern Match Result
+26 denom. B orientation : Pattern Match Result
+26 denom. C orientation : Pattern Match Result
+26 denom. D orientation : Pattern Match Result
+27 denom. A orientation : Pattern Match Result
+27 denom. B orientation : Pattern Match Result
+27 denom. C orientation : Pattern Match Result
+27 denom. D orientation : Pattern Match Result
+28 denom. A orientation : Pattern Match Result
+28 denom. B orientation : Pattern Match Result
+28 denom. C orientation : Pattern Match Result
+28 denom. D orientation : Pattern Match Result
+29 denom. A orientation : Pattern Match Result
+29 denom. B orientation : Pattern Match Result
+29 denom. C orientation : Pattern Match Result
+29 denom. D orientation : Pattern Match Result
+30 denom. A orientation : Pattern Match Result
+30 denom. B orientation : Pattern Match Result
+30 denom. C orientation : Pattern Match Result
+30 denom. D orientation : Pattern Match Result
+31 denom. A orientation : Pattern Match Result
+31 denom. B orientation : Pattern Match Result
+31 denom. C orientation : Pattern Match Result
+31 denom. D orientation : Pattern Match Result
+32 denom. A orientation : Pattern Match Result
+32 denom. B orientation : Pattern Match Result
+32 denom. C orientation : Pattern Match Result
+32 denom. D orientation : Pattern Match Result
+Infra Red Pattern Match, Whole Area
+Green Transmissive Pattern Match, Whole Area
+Green Reflection Pattern Match, Whole Area
+Reserved
+Infra Red Pattern Match, Vertical 1
+Infra Red Pattern Match, Vertical 2
+Infra Red Pattern Match, Vertical 3
+Infra Red Pattern Match, Vertical 4
+Infra Red Pattern Match, Vertical 5
+Infra Red Pattern Match, Vertical 6
+Infra Red Pattern Match, Vertical 7
+Infra Red Pattern Match, Vertical 8
+Infra Red Pattern Match, Vertical 9
+Infra Red Pattern Match, Vertical 10
+Infra Red Pattern Match, Vertical 11
+Infra Red Pattern Match, Vertical 12
+Infra Red Pattern Match, Vertical 13
+Infra Red Pattern Match, Vertical 14
+Infra Red Pattern Match, Vertical 15
+Infra Red Pattern Match, Vertical 16
+Infra Red Pattern Match, Vertical 17
+Infra Red Pattern Match, Vertical 18
+Infra Red Pattern Match, Vertical 19
+Infra Red Pattern Match, Vertical 20
+Infra Red Pattern Match, Vertical 21
+Infra Red Pattern Match, Vertical 22
+Infra Red Pattern Match, Horizontal 1
+Infra Red Pattern Match, Horizontal 2
+Infra Red Pattern Match, Horizontal 3
+Infra Red Pattern Match, Horizontal 4
+Infra Red Pattern Match, Horizontal 5
+Infra Red Pattern Match, Horizontal 6
+Infra Red Pattern Match, Horizontal 7
+Infra Red Pattern Match, Horizontal 8
+Infra Red Pattern Match, Horizontal 9
+Infra Red Pattern Match, Horizontal 10 S1-35
+Green Transmissive Pattern Match, Vertical 1
+Green Transmissive Pattern Match, Vertical 2
+Green Transmissive Pattern Match, Vertical 3
+Green Transmissive Pattern Match, Vertical 4 S1-40
+Green Transmissive Pattern Match, Vertical 5
+Green Transmissive Pattern Match, Vertical 6
+Green Transmissive Pattern Match, Vertical 7
+Green Transmissive Pattern Match, Vertical 8
+Green Transmissive Pattern Match, Vertical 9
+Green Transmissive Pattern Match, Vertical 10
+Green Transmissive Pattern Match, Vertical 11
+Green Transmissive Pattern Match, Vertical 12
+Green Transmissive Pattern Match, Vertical 13
+Green Transmissive Pattern Match, Vertical 14 S1-50
+Green Transmissive Pattern Match, Vertical 15
+Green Transmissive Pattern Match, Vertical 16
+Green Transmissive Pattern Match, Vertical 17
+Green Transmissive Pattern Match, Vertical 18
+Green Transmissive Pattern Match, Vertical 19
+Green Transmissive Pattern Match, Vertical 20
+Green Transmissive Pattern Match, Vertical 21
+Green Transmissive Pattern Match, Vertical 22
+Green Transmissive Pattern Match, Horizontal 1
+Green Transmissive Pattern Match, Horizontal 2 S1-60
+Green Transmissive Pattern Match, Horizontal 3
+Green Transmissive Pattern Match, Horizontal 4
+Green Transmissive Pattern Match, Horizontal 5
+Green Transmissive Pattern Match, Horizontal 6
+Green Transmissive Pattern Match, Horizontal 7
+Green Transmissive Pattern Match, Horizontal 8
+Green Transmissive Pattern Match, Horizontal 9
+Green Transmissive Pattern Match, Horizontal 10
+Green Reflection Pattern Match, Vertical 1
+Green Reflection Pattern Match, Vertical 2 S1-70
+Green Reflection Pattern Match, Vertical 3
+Green Reflection Pattern Match, Vertical 4
+Green Reflection Pattern Match, Vertical 5
+Green Reflection Pattern Match, Vertical 6
+Green Reflection Pattern Match, Vertical 7
+Green Reflection Pattern Match, Vertical 8
+Green Reflection Pattern Match, Vertical 9
+Green Reflection Pattern Match, Vertical 10
+Green Reflection Pattern Match, Vertical 11
+Green Reflection Pattern Match, Vertical 12 S1-80
+Green Reflection Pattern Match, Vertical 13
+Green Reflection Pattern Match, Vertical 14
+Green Reflection Pattern Match, Vertical 15
+Green Reflection Pattern Match, Vertical 16
+Green Reflection Pattern Match, Vertical 17
+Green Reflection Pattern Match, Vertical 18
+Green Reflection Pattern Match, Vertical 19
+Green Reflection Pattern Match, Vertical 20
+Green Reflection Pattern Match, Vertical 21
+Green Reflection Pattern Match, Vertical 22 S1-90
+Green Reflection Pattern Match, Horizontal 1
+Green Reflection Pattern Match, Horizontal 2
+Green Reflection Pattern Match, Horizontal 3
+Green Reflection Pattern Match, Horizontal 4
+Green Reflection Pattern Match, Horizontal 5
+Green Reflection Pattern Match, Horizontal 6
+Green Reflection Pattern Match, Horizontal 7
+Green Reflection Pattern Match, Horizontal 8
+Green Reflection Pattern Match, Horizontal 9
+Green Reflection Pattern Match, Horizontal 10 S1-100
+Magnetism Additional Value, Whole Area
+Magnetism Additional Value, Right 8 Channel
+Magnetism Additional Value, Left 8 Channel
+Magnetic Patterm Match, Left Channel 
+Magnetic Patterm Match, Right Channel 
+UV Additional Value, Upper Side
+UV Additional Value, Lower Side
+ABC Wave Distance Additional Value
+Magnetic Pattern Match Ch1
+Magnetic Pattern Match Ch2
+Magnetic Pattern Match Ch3
+Magnetic Pattern Match Ch4
+Magnetic Pattern Match Ch5
+Magnetic Pattern Match Ch6
+Magnetic Pattern Match Ch7
+Magnetic Pattern Match Ch8
+Magnetic Pattern Match Ch9
+Magnetic Pattern Match Ch10
+Magnetic Pattern Match Ch11
+Magnetic Pattern Match Ch12
+Magnetic Pattern Match Ch13
+Magnetic Pattern Match Ch14
+Magnetic Pattern Match Ch15
+Magnetic Pattern Match Ch16
+UV Additional Value, Upper + Lower
+Magnetic Additional Value, Whole Area, Lower Limit
+Magnetic Additional Value, Right 8 Channel, Lower Limit
+Magnetic Additional Value, Left 8 Channel, Lower Limit
+Dirty 1
+Dirty 2
+Dirty 3
+Reserved
+
+
+
+
+
+
+
+
+
+
+
+
+Thickness Data, Left 1
+Thickness Data, Left 2
+Thickness Data, Left 3
+Thickness Data, Left 4
+Thickness Data, Left 5
+Thickness Data, Left 6
+Thickness Data, Left 7
+Thickness Data, Left 8
+Thickness Data, Left 9
+Thickness Data, Left 10
+Thickness Data, Left 11
+Thickness Data, Left 12
+Thickness Data, Left 13
+Thickness Data, Left 14
+Thickness Data, Left 15
+Thickness Data, Left 16
+Thickness Data, Left 17
+Thickness Data, Left 18
+Thickness Data, Left 19
+Thickness Data, Left 20
+Thickness Data, Right 1
+Thickness Data, Right 2
+Thickness Data, Right 3
+Thickness Data, Right 4
+Thickness Data, Right 5
+Thickness Data, Right 6
+Thickness Data, Right 7
+Thickness Data, Right 8
+Thickness Data, Right 9
+Thickness Data, Right 10
+Thickness Data, Right 11
+Thickness Data, Right 12
+Thickness Data, Right 13
+Thickness Data, Right 14
+Thickness Data, Right 15
+Thickness Data, Right 16
+Thickness Data, Right 17
+Thickness Data, Right 18
+Thickness Data, Right 19
+Thickness Data, Right 20
+
+
+
+
+
+
+
+
+Supplement Func. 1, (Back/Front judegment)
+Supplement Func. 2
+Supplement Func. 3
+Supplement Func. 4
+Supplement Func. 5
+Supplement Func. 6
+Supplement Func. 7
+Supplement Func. 8
+Supplement Func. 9
+Supplement Func. 10
+Supplement Func. 11
+Long Edge Length, Speed adjusted
+Short Edge Length, Speed adjusted
+= (Infra Red Additional Value)/128
+= (Green Transmissive Additional Value)/128
+Binary Pixel Additional Value
+Skew Angle
+Infra Red Density Adjustment
+Green Transmissive Density Adjustment
+Green Transmissive Density Adjustment, Front Side
+Green Transmissive Density Adjustment, Back Side
+Magnetic Additional Value
+ID
+Transaction Number
+= (Green Reflection Additional Valye, Front Side)/128
+= (Green Reflection Additional Valye, Back Side)/128
+Presence of Serial Number 
+Serial Number Direction
+Serial Number Width
+Serial Number Height
+Thickness Value Average Total
+Denomination Judgement Result Before Re-judgement
+Read-out Address
+Dogear Area, Long Edge Set Value
+Missing Area
+Read-out Address
+Long Edge Set Value
+Hole Area
+AI Thickness, Left
+Ai Thickness, Right
+Thickness Read-out Position, Left
+Thickness Read-out Position, Right
+Thickness Pixel, Left
+Thickness Pixel, Right
+Thickness Average, Left
+Thickness Average, Right
+AI Revised, Left
+AI Revised, Right
+Damage Result
+Authentic 1 Result
+Authentic 2 Result
+Denomination Result
+GBVM-TYPE
+Start Year 
+Start Month/Day
+Start Time/Minute
+Overall Result
+Denomination Result
+Processing Number
+Collection Mode
+Number of matched denomination
+Result Response, Upper Digit
+Result Response, Lower Digit
+Damage Bit
+New Green Transmissive, Watermark
+Old Green Transmissive, Watermark
+Infra Red, Watermark
+Old Green Transmissive, Watermark
+Infra Red Density, Watermark
+White Ratio on Infra Red, Watermark
+Green Density, Watermark
+White Ratio on Green, Watermark
+Adjucent Difference, Watermark
+Enphatic Infra Red, Watermnark
+Enphatic Color Difference, Watermark
+Counterfeit CC, Color Diffrence
+Infra Red Density, Thread
+White Ratio on Infra Red1
+White Ratio on Infra Red2
+White Ratio on Infra Red3
+Country Specific Authentic Func2. No.17
+Country Specific Authentic Func2. No.18
+Country Specific Authentic Func2. No.19
+Country Specific Authentic Func2. No.20
+Country Specific Authentic Func2. No.21
+Country Specific Authentic Func2. No.22
+Country Specific Authentic Func2. No.23
+Country Specific Authentic Func2. No.24
+Country Specific Authentic Func2. No.25
+Country Specific Authentic Func2. No.26
+Country Specific Authentic Func2. No.27
+Country Specific Authentic Func2. No.28
+Country Specific Authentic Func2. No.29
+Country Specific Authentic Func2. No.30
+Country Specific Authentic Func2. No.31
+Country Specific Authentic Func2. No.32
+Adjusted Frequency Distribution, Maximum
+Maximun Frequence Array Number (MP)
+Adjusted MP (SLY)
+Coord. Short Edge1 Point (XC)(SLX)
+Sample Total Number (N)
+Sample Total Inverse Number (65536/N)
+X-Axis Total Additional Value SGX
+Y-Axis Total Additional Value SGY
+X-Axis Average Value LX
+Y-Axis Average Value LY
+Reserved
+Reserved
+Characteristic Image2 Size
+Characteristic Image3 Size
+Skew Angle (KA)
+Skew Angle Inverse (KAG)
+Skew Sign (KPN)
+Y Intercept (b)
+Y=98 Coord. Short Edge Length1 Point (LLX) 
+Displacement ARM Transport Sensor
+Edge Point X Basis (XK)
+Edge Point Y Basis (YK)
+Binary Image Physical Edge Point (TTOP)
+Adjusted Edge Point X Basis (XKH)
+Adjusted Edge Point Y Basis (YKH)
+Adjusted Binary Image Physical Edge Point (TTOPH)
+Infra Red Density Adjustment Value
+Green Transmissive Density Adjustment Value
+Green Reflection Density Adjustment Value
+Long Edge Length
+Short Edge Length
+Thickness Reduction (XK)
+ARM Skew Angle
+Bank, Green Reflection Image
+Bank, Green Transmissive Image
+Bank, Infra Red Image
+Bank. Raw Aligned Image
+Bank, Serial Number Image
+Work, Sum Check
+=(Number of Denomination)/4
+Total Additional Value, XY
+É∞XÇx(SXY)
+Total Additional Value, X^2
+É∞X^2(S*2)
+(X-Axis Avarege)^2*N
+ÅiN*2Åj
+(X-Axis Avarege)*(Y-Axis Average)*N
+(N*Y)
+A Wave Additional Value
+
+B Wave Additional Value
+
+C Wave Additional Value
+
+Binary Additional Value
+Work, Density Adjustment
+Thickness Reduction Data Adjustment XK
+Work, Denomination
+Serial Number Data
+76BYTES
+---START---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Serial Number Sata
+---END---
+A1 Wave(Infra Red) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+B Wave(Green Transmissive) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+C Wave(Green Reflection) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A2 Wave(Infra Red 2) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A3 Wave(Infra Red Reflection) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A3 Wave(Infra Red Reflection) Reduction Image
+CONT'D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A4 Wave(Infra Red Reflection, Back Side) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A4 Wave(Infra Red Reflection, Back Side) Reduction Image
+CONT'D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+D Wave(Green Reflection, Back Side) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+D Wave(Green Reflection, Back Side) Reduction Image
+CONT'D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+E1 Wave(Red Reflection) Reduction Image
+220BYTES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+E1 Wave(Red Reflection) Reduction Image
+CONT'D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+E2 Wave(Red Reflection, Back Side) Reduction Image
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+E2 Wave(Red Reflection, Back Side) Reduction Image
+CONT'D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+F1 Wave(Blue Reflection) Reduction Image
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+F2 Wave(Blue Reflection, Back Side) Reduction Image
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+F2 Wave(Blue Reflection, Back Side) Reduction Image
+CONT'D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Country Specified Supplemental Func, 64Func/graffiti64Func0-0C Wave
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Denomination Supplemental Func, 256Funcs.
+Sipplemental Func 2
+Sipplemental Func 3
+Sipplemental Func 4
+Sipplemental Func 5
+Sipplemental Func 6
+Sipplemental Func 7
+Sipplemental Func 8
+Sipplemental Func 9
+Sipplemental Func 10
+Sipplemental Func 11
+Long Edge Length (Speed Adjusted)
+Short Edge Length (Speed Adjusted)
+=(Infra Red Additional Value)/128
+=(Green Transmissive Additional Value)/128
+Binary Pixel Additional Value
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Denomination Supplemental Func. 100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1 Tape Pixel, Damage Func. 64 Funcs
+2 Tape Whole Area Out Put
+3 Missing Area
+4 Dogear Area
+5 Hole Area
+6
+7
+8
+9 Douoble Feed Pixels
+10
+11
+12
+13
+14
+15 Graffiti, Front Side 1
+
+
+
+
+
+16 Graffiti, Back Side 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Authentic 2 Func. Last Half 224 Funcs
+(First Half 32 Funcs are convertible with Current BV 
+Stored in S1-S35)
+36
+37
+38
+39
+S1-40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+S1-50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+S1-60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+S1-70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+S1-80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+S1-90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+S1-100
+New Function 1
+New Function 2
+New Function 3
+New Function 4
+New Function 5
+New Function 6
+New Function 7
+New Function 8
+New Function 9
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+106 138 UV Upper
+107 139 UV Lower
+
+141 mag
+142 mag
+143 mag
+144 mag
+145 mag
+146 mag
+147 mag
+148 mag
+149 mag
+150 mag
+151 mag
+152 mag
+153 mag
+154 mag
+155 mag
+156 mag
+125 157 UV Upper+Lower
+
+
+
+
+
+
+
+165 UV
+166 UV
+167 UV
+168 UV
+169 UV
+170 UV
+171 mag
+172 mag
+173 mag
+174 mag
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+200
+
+
+
+
+
+
+
+
+
+210
+
+
+
+
+
+
+
+
+
+220
+
+
+
+
+
+
+
+
+
+230
+
+
+
+
+
+
+
+
+240
+
+
+
+
+
+
+
+
+
+
+250
+
+
+
+
+
+256 Last of Authentic 2
+Leading Edge Position
+Left Edge position
+Right Edge Position
+Trailing Edge Position
+GBVx Type
+Optical Line Sensor Type
+Wave 0 Binary Threshold
+Wave 1 Binary Threshold
+Wave 2 Binary Threshold
+Wave 3 Binary Threshold
+Wave 4 Binary Threshold
+Wave 5 Binary Threshold
+Wave 6 Binary Threshold
+Wave 7 Binary Threshold
+Wave 8 Binary Threshold
+Wave 9 Binary Threshold
+Wave 10 Binary Threshold
+Wave 11 Binary Threshold
+Wave 12 Binary Threshold
+Wave 13 Binary Threshold
+Wave 14 Binary Threshold
+Wave 15 Binary Threshold
+Transport Direction
+Transport Speed
+Sequence Number
+Optical Sensor Total Line Number Read
+Magnetic Sensor Totoal Line Number Read
+UV Sensor Totoal Line Number Read
+Thickness Sensor Totoal Line Number Read
+Skew Angle (BV-IN)
+Skew Angle (BV-OUT)
+Transport Speed Fluctuation
+Congtrol Error Detected
+A1 Wave Additional Value
+
+A2 Wave Additional Value
+
+A3 Wave Additional Value
+
+A4 Wave Additional Value
+
+B Wave Additional Value
+
+C Wave Additional Value
+
+D Wave Additional Value
+
+E1 Wave Additional Value
+
+E2 Wave Additional Value
+
+F1 Wave Additional Value
+
+F2 Wave Additional Value
+
+ Reserved, Wave 1 Additional Value
+
+ Reserved, Wave 2 Additional Value
+
+ Reserved, Wave 3 Additional Value
+
+ Reserved, Wave 4 Additional Value
+
+ Reserved, Wave 5 Additional Value
+
+A1 Wave Binary Additional Value
+A2 Wave Binary Additional Value
+A3 Wave Binary Additional Value
+A4 Wave Binary Additional Value
+B Wave Binary Additional Value
+C Wave Binary Additional Value
+D Wave Binary Additional Value
+E1 Wave Binary Additional Value
+E2 Wave Binary Additional Value
+F1 Wave Binary Additional Value
+F2 Wave Binary Additional Value
+Reserved, X Wave Binary Additional Value
+Reserved, X Wave Binary Additional Value
+Reserved, X Wave Binary Additional Value
+Reserved, X Wave Binary Additional Value
+Reserved, X Wave Binary Additional Value
+A1 Wave Density Adjustment Value
+A2 Wave Density Adjustment Value
+A3 Wave Density Adjustment Value
+A4 Wave Density Adjustment Value
+B Wave Density Adjustment Value
+C Wave Density Adjustment Value
+D Wave Density Adjustment Value
+E1 Wave Density Adjustment Value
+E2 Wave Density Adjustment Value
+F1 Wave Density Adjustment Value
+F2 Wave Density Adjustment Value
+Reserved, X Wave Density Adjustment Value
+Reserved, X Wave Density Adjustment Value
+Reserved, X Wave Density Adjustment Value
+Reserved, X Wave Density Adjustment Value
+Reserved, X Wave Density Adjustment Value
+Denomination Judgment Level
+Damage Judgement Level 0
+Damage Judgement Level 1
+Damage Judgement Level 2
+Damage Judgement Level 3
+Damage Judgement Level 4
+Damage Judgement Level 5
+Damage Judgement Level 6
+Damage Judgement Level 7
+Damage Judgement Level 8
+Damage Judgement Level 9
+Damage Judgement Level 10
+Damage Judgement Level 11
+Damage Judgement Level 12
+Damage Judgement Level 13
+Damage Judgement Level 14
+Damage Judgement Level 15
+Enable Denomination Set Bit 0-15
+Enable Denomination Set Bit 16-31
+Enable Denomination Set Bit 32-47
+Enable Denomination Set Bit 48-63
+Enable Denomination Set Bit 64-79
+Enable Denomination Set Bit 80-95
+Enable Denomination Set Bit 96-111
+Enable Denomination Set Bit 112-127
+A1 Wave Resolutions
+A2 Wave Resolutions
+A3 Wave Resolutions
+A4 Wave Resolutions
+B Wave Resolutions
+C Wave Resolutions
+D Wave Resolutions
+E1 Wave Resolutions
+E2 Wave Resolutions
+F1 Wave Resolutions
+F2 Wave Resolutions
+Reserved, X Wave Resolutions
+Reserved, X Wave Resolutions
+Reserved, X Wave Resolutions
+Reserved, X Wave Resolutions
+Reserved, X Wave Resolutions
+Test Note Binary Slice Threshold
+Presence of Counterfeit
+Counterfeit Group
+Maxmum Number of Occurrence in Group
+Country Code
+Wave Length Threshold Numeber for Binary Conversion
+Back Side XKHB
+Back Side YKHB
+Back Side TTOPB
+1 Bite Error
+Work, Alignment (Long Edge Removed Number)
+Work, Alignment (Short Edge Removed Number)
+Country Judgment Result
+Denomination Result
+Damage ATM-NG
+Damage Bad-Q
+Authentic 1
+Authentic 2
+Skew
+Long/Double
+Re-Denimnation Paste
+Damage Overlimit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -7,6 +7,18 @@ SINGAN2 算法的现代化重构版本：纯 C++17 算法核心 + HTTP API + Web
 
 ![原版主界面](docs/assets/main_ui.png)
 
+## 改造前后对比
+
+**原版 MFC 主界面**（`Singan2_Lai_GBVE_SR_OLD`，VC6 / Win32，1080×700）：
+
+![原版 MFC 主界面](docs/assets/compare_original_mfc.png)
+
+**Web 改造版**（本工程：纯 C++17 算法核心 + HTTP API + React/ECharts，功能等价、界面 1:1 复刻）：
+
+![Web 改造版](docs/assets/compare_web_rebuild.png)
+
+改造要点：脱离 Win32/MFC 依赖（浏览器即可操作）；主界面布局、控件语义、右键菜单、顶部菜单 1:1 复刻；数据链路（打开 / 分析 / Make Graph / Statistics / ATB / VTB / 坐标 / Graph 存取）全部走 HTTP API；前端 Vitest **38 文件 / 200 用例全绿**。
+
 ## 阶段状态
 
 | 阶段 | 内容 | 状态 |
@@ -18,12 +30,15 @@ SINGAN2 算法的现代化重构版本：纯 C++17 算法核心 + HTTP API + Web
 | M4 Web 前端 | React + ECharts 调用 API（1:1 复刻原版 MFC 主界面） | ✅ 完成（P0–P5 全链路 + ATB 面板真实移植 + Graph 操作区 + 本地文件选择对话框） |
 | M5 批量统计 | Statistics / Make Graph 批量多 record 并行计算 + Result Details + S2Chart 跨 record 曲线 | ✅ 完成（服务端线程池并行；Make Graph 支持 4 种测量方法） |
 
-## 最近更新（v0.6.0，2026-09-03）
+## 版本历史与变更内容
 
-- **ATB 面板真实移植（P4）**：`/api/atb/load|area|update|ctb`，ATB/SRU 二进制格式（128×512×8B；SRU=32B 头+256×1024×8B），area 切换、条目编辑整表写回、Show/Show All 彩色叠加、Set 4D 公式、CTB 面额尺寸。
-- **本地文件选择对话框**：`GET /api/fs/list` + `FileBrowser` 组件（目录单击进入、`..` 上级、路径可手输），ATB/CTB/GPH 三处共用。
-- **Graph 操作区 1:1 重建**：测量方法列表（`IDC_LIST_GRAPH_FUNS`）、原版 .GPH 二进制存取（`/api/graph/gph-save|load`，9400B）、Combine 多文件累加；Mul-X/ABS 为原版死控件（TBD），面板内附说明。
-- **性能**：Make Graph 7s→2s（批量提取+单波快速路径）、整通道预载「秒载 1000 张」、毫秒级后端日志 + LogViewer。详见 `docs/优化与构建说明.md` 与 `docs/11_模块功能同步方案_P0-P5.md`。
+| 版本 | 日期 | 变更内容 |
+|------|------|----------|
+| **v0.6.2** | 2026-09-04 | ① **VTB 面板 1:1 重建**：Mode 6 Tab（Real/Test/...）+ Process 8 Tab 三组文案随 Mode 切换、命令文本列表（`%4d %04X %04X...` 与原版逐字符一致）、选中回显编辑框、Load VTB 文件选择；② **Infomation Display 四页完整实现**（原为黑屏占位）：Concentration hex 阵列+统计（点数/总和/平均/分散/范围计数，IJO/IKA 可调）、Pixel Distribution 行列分布图、Largen each Pixel 倍率放大（x3~x23）、DSP-ARM Function（新增 `/api/dsparm`，读 `GBVM_DSP_ARM.txt` + 小图像段 u16）；③ **顶部菜单全部接到真实功能**（History 履历对话框 / Grid / Information / Load→ATB/Data / Create1/2/3 / Calculate all=批量统计）；④ **右键菜单逐项核对修正**：Restore 等价 MainRun（重跑分析）、Gradient/Binary 改用当前滑条参数（原硬编码）、补 7 条分隔线；⑤ 三个 Web 占位面板（Operation / TH 波段组合 / Notes）确认 OLD 无对应实现 → 全控件禁用 + 醒目说明；⑥ 测试环境修复（canvas stub、`logError` state 遮蔽导入函数的产品级 bug）→ **Vitest 38 文件 / 200 用例全绿** |
+| **v0.6.1** | 2026-09-04 | ① **Graph 操作区 1:1**：测量方法列表（`IDC_LIST_GRAPH_FUNS` 0-3 真实语义）、原版 .GPH 二进制存取（`/api/graph/gph-save|load`，9400B）、Combine 多文件累加；Mul-X/ABS 确认原版死控件（TBD）附说明；② **本地文件选择对话框**：`GET /api/fs/list` + `FileBrowser`（目录单击进入、路径手输），ATB/CTB/GPH/Data 共用；③ ATB 面板防拥挤加宽（217→330px）、右列面板高度统一 +100；④ 测试环境修复 → 用例全绿 |
+| **v0.6.0** | 2026-09-03 | ① **ATB 面板真实移植（P4）**：`/api/atb/load\|area\|update\|ctb`，ATB/SRU 二进制格式（128×512×8B；SRU=32B 头+256×1024×8B），area 切换、条目编辑整表写回、Show/Show All 彩色叠加、Set 4D 公式、CTB 面额尺寸；② **性能**：Make Graph 7s→2s（批量提取+单波快速路径）、整通道预载「秒载 1000 张」、毫秒级后端日志 + LogViewer；③ 文档全面同步（§7.16–7.22） |
+
+> 各轮实施细节见 `docs/11_模块功能同步方案_P0-P5.md`（§7.1 起）；性能专题见 `docs/优化与构建说明.md`、`docs/13_性能优化_整通道预载与秒级加载.md`。
 
 ## 目录结构
 
@@ -109,7 +124,7 @@ python server/smoke_test.py
 cd web
 npm install
 npm run dev          # Vite 开发服务器 @ :5173（已配 /api -> :8080 代理）
-npm test             # Vitest 全量测试（38 文件 / 198 用例，全部通过）
+npm test             # Vitest 全量测试（38 文件 / 200 用例，全部通过）
 ```
 
 ### Web 布局约束（重要）
@@ -144,7 +159,7 @@ cd poc && python run_poc.py --dat ../data/2A_DA_111017_115542.dat \
 前端回归（Vitest）：
 
 ```bash
-cd web && npm test        # ✅ 38 文件 / 198 用例全部通过
+cd web && npm test        # ✅ 38 文件 / 200 用例全部通过
 ```
 
 ## 编码约定
@@ -157,7 +172,7 @@ cd web && npm test        # ✅ 38 文件 / 198 用例全部通过
 
 ## 发布说明
 
-- 仓库默认分支：`main`（原 `master` 已本地改名对齐）。
+- 仓库默认分支：`main`（原 `master` 已本地改名对齐）。 
 - 完整工程已通过 GitHub API（Blob/Tree/Commit）上传至 `main`，commit 含全部源码、数据样本、文档。
 - 已知限制：单个 GitHub blob ≤ 25MB，**超大会话导出 JSON（>150MB）不参与上传**，按需用 Git LFS 或拆分归档。
 - `.gitignore` 已排除 `node_modules/`、`build/`、`dist/`、`.codebuddy/`、`*.pyc`、`*.test.*`、`tests/`、`uploads/`、`data/*.dat`（运行期上传/样本大体积二进制）等大体积 / 生成物；仓库只保留源码、文档与小型样本。

@@ -54,7 +54,7 @@ const MENUS = [
   },
 ];
 
-export default function TopMenuBar({ activeMenu, setActiveMenu, setActiveDialog, pushHistory }) {
+export default function TopMenuBar({ activeMenu, setActiveMenu, onCommand, pushHistory }) {
   const [open, setOpen] = useState(null);
   const [subOpen, setSubOpen] = useState(null);
   const rootRef = useRef(null);
@@ -75,14 +75,10 @@ export default function TopMenuBar({ activeMenu, setActiveMenu, setActiveDialog,
     return () => document.removeEventListener('click', handler);
   }, [setActiveMenu]);
 
+  // 菜单命令统一交给 App 的 handleMenuCommand 分发（对照 OLD WinMain.cpp WM_COMMAND 各 case）
   const fire = (k) => {
     pushHistory?.(`Menu → ${k}`);
-    if (k === 'finish' || k === 'fin') setActiveDialog?.('finish');
-    if (k === 'info') setActiveDialog?.('info');
-    if (k === 'sdialog' || k === 'country') setActiveDialog?.('setting');
-    if (k === 'l-coord') setActiveDialog?.('coordinate');
-    if (k === 'img-th') setActiveDialog?.('bigimg');
-    if (k === 'calcall') setActiveDialog?.('export');
+    onCommand?.(k);
   };
 
   return (

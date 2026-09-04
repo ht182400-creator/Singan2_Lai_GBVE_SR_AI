@@ -9,6 +9,7 @@
 //   POST /api/session/open          {dat_path}                     -> {record_count, wave_count, waves[]}
 //   POST /api/image                 {dat_path,record,wave,mode,...}-> {width,height,encoding,min,max,data(base64)}
 //   POST /api/small-image           {dat_path,record}              -> {size,data(base64)}
+//   POST /api/dsparm                {dat_path,record}              -> DSP-ARM Function 页（函数名文件 + 小图像段 u16）
 //   -- P1 分析链路 --
 //   POST /api/analyze               多部件上传 .dat
 //   POST /api/analyze-path          {dat_path,zfile_path,record,kin,country}
@@ -1188,6 +1189,51 @@ int main(int argc, char** argv) {
         body += ",\"max\":" + std::to_string(mx);
         body += ",\"data\":\"" + data + "\"}";
         send_ok(res, body);
+    });
+
+    // DSP-ARM Function 页（Information Display 第 4 页，复刻 OLD JProc.cpp dsparm_set）：
+    // 读函数名文件 GBVM_DSP_ARM.txt（每行一个函数名，空行也产生空名条目——忠实 OLD 解析），
+    // 与小图像段组合输出。查找顺序：CWD → CWD\data。OLD 取 global_small_image[1580+j] 大端 u16；
+    // 本工程 extract_small_image 已去 1024B 头，故对应 seg[1580-1024+j]。
+    // 文件缺失时返回 found:false（等价 OLD "Cannot find Function Name File"）。
+    svr.Post("/api/dsparm", [](const httplib::Request& req, httplib::Response& res) {
+        const std::string dat_path = json_get_str(req.body, "dat_path", "");
+        const int record = json_get_int(req.body, "record", 0);
+        std::ifstream fp("GBVM_DSP_ARM.txt", std::ios::binary);
+        if (!fp.is_open()) fp.open("data\\GBVM_DSP_ARM.txt", std::ios::binary);
+        if (!fp.is_open()) {
+            send_ok(res, "{\"found\":false,\"message\":\"Cannot find Function Name File (GBVM_DSP_ARM.txt)\"}");
+            return;
+        }
+        std::vector<std::string> names;
+        std::string line;
+        while (std::getline(fp, line)) {
+            while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+            names.push_back(line); // 空行也保留（OLD 解析同样产生空名条目）
+        }
+        fp.close();
+
+        std::vector<uint8_t> seg;
+        if (!dat_path.empty()) seg = singan2::extract_small_image(dat_path, record);
+
+        std::string items = "[";
+        for (size_t j = 0; j < names.size(); j++) {
+            const int no = 1580 + static_cast<int>(j);
+            int val = 0;
+            if ((int)seg.size() >= no - 1024 + 2 && no >= 1024) {
+                const size_t off = (size_t)no - 1024;
+                val = (seg[off] << 8) | seg[off + 1];
+            }
+            if (j) items += ",";
+            char hex[8];
+            snprintf(hex, sizeof(hex), "%4X", val);
+            items += std::string("{\"no\":") + std::to_string(no) +
+                     ",\"hex\":\"" + hex + "\",\"dec\":" + std::to_string(val) +
+                     ",\"name\":\"" + json_escape(names[j]) + "\"}";
+        }
+        items += "]";
+        send_ok(res, std::string("{\"found\":true,\"count\":") + std::to_string(names.size()) +
+                     ",\"items\":" + items + "}");
     });
 
     svr.Post("/api/small-image", [](const httplib::Request& req, httplib::Response& res) {
