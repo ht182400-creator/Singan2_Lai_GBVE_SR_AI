@@ -39,6 +39,11 @@ std::vector<uint8_t> extract_wave_all(const std::string& file_path, const std::s
 // 提取指定枚的 global_small_image(SMALL_SIZE 字节)
 std::vector<uint8_t> extract_small_image(const std::string& file_path, int record_index = 0);
 
+// 提取指定枚的原始 small 段（SMALL_SIZE 字节，**不去 1024B 头**）。
+// 复刻 OLD Ren.cpp DspOverWrite 的 s_img_stock 行源（fread global_small_image 含头），
+// 供 SM_dsp.dat 落盘：行内偏移 2096/2144/2184/2224/2352 均相对含头数据。
+std::vector<uint8_t> extract_small_image_raw(const std::string& file_path, int record_index = 0);
+
 // 按 OLD/MainRun.cpp 第 833-843 行原版偏移，从原始(去头前)小图段解析 Validation Result 字段
 struct SmallImageValidation {
   std::string han;             // [4220..4223]  %X%X%X%X

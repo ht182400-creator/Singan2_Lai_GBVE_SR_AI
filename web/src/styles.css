@@ -830,6 +830,31 @@ fieldset legend {
 .info-dsparm { max-height: 380px; overflow: auto; background: #fff; border: 1px solid #7a7a7a;
   font-size: 11px; padding: 3px; }
 
+/* === Setting Dialogue（1:1 复刻 OLD IDD_S_SET_DLG 三列布局） === */
+.setdlg-cols { display: flex; gap: 10px; align-items: flex-start; }
+.setdlg-col { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.setdlg-group { border: 1px solid #888; background: #d4d0c8; margin: 0; padding: 4px 6px;
+  font-size: 11px; }
+.setdlg-group legend { font-size: 11px; font-weight: 700; padding: 0 4px; }
+.setdlg-group label { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.setdlg-country { width: 100%; font-size: 11px; }
+.setdlg-flexrow { display: flex; gap: 8px; }
+.setdlg-offset { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.setdlg-offset span { flex: 1; }
+.setdlg-offset input { width: 52px; font-size: 11px; }
+.setdlg-note { font-size: 10px; color: #555; margin-left: 16px; }
+.setdlg-disabled { color: #999; }
+.setdlg-z { min-width: 175px; }
+.setdlg-zrow { display: flex; gap: 8px; }
+.setdlg-zrow label { min-width: 62px; }
+.setdlg-zbtns { display: flex; gap: 6px; margin-top: 4px; }
+.setdlg-s32 { display: flex; gap: 10px; }
+.setdlg-s32col { display: flex; flex-direction: column; gap: 1px; }
+.setdlg-denlabel { font-size: 11px; margin: 4px 0 2px; }
+.setdlg-okcancel { display: flex; flex-direction: column; gap: 6px; align-self: stretch;
+  justify-content: center; }
+.setdlg-okcancel .btn { width: 100%; padding: 4px; }
+
 /* === Row Graph (666–726, h 60) === */
 .row-graph {
   position: absolute; left: 613px; top: 686px;

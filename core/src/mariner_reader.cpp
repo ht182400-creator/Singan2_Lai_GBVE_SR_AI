@@ -331,6 +331,20 @@ std::vector<uint8_t> extract_small_image(const std::string& file_path, int recor
     return seg;
 }
 
+std::vector<uint8_t> extract_small_image_raw(const std::string& file_path, int record_index) {
+    const std::vector<uint8_t>& data = load_file_cached(file_path);
+    if (data.empty()) return {};
+
+    const auto meta = get_small_meta(file_path);
+    const uint32_t one_data_size = meta.first;
+    const uint32_t length_mm_file_header = meta.second;
+    const uint32_t offset = one_data_size * static_cast<uint32_t>(record_index) +
+                            length_mm_file_header + BLOCK_HEADER;
+    if (offset + SMALL_SIZE > data.size()) return {};
+    // 不做 SMALL_SKIP 去头：SM_dsp.dat 行结构（Ren.cpp DspOverWrite）偏移相对含头数据
+    return std::vector<uint8_t>(data.begin() + offset, data.begin() + offset + SMALL_SIZE);
+}
+
 SmallImageValidation extract_small_image_validation(const std::string& file_path, int record_index) {
     const std::vector<uint8_t>& data = load_file_cached(file_path);
     SmallImageValidation out;

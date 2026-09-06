@@ -31,6 +31,7 @@ import DialogModal from './components/DialogModal.jsx';
 import LogViewer from './components/LogViewer.jsx';
 import ContextMenu from './components/ContextMenu.jsx';
 import InfoDisplayDialog from './components/InfoDisplayDialog.jsx';
+import SettingDialogueDialog, { COUNTRY_NAMES } from './components/SettingDialogueDialog.jsx';
 import GraphResultPanel from './components/GraphResultPanel.jsx';
 import AtbPanel from './components/AtbPanel.jsx';
 import FileBrowser from './components/FileBrowser.jsx';
@@ -43,7 +44,7 @@ import GraphViewOverlay from './components/GraphViewOverlay.jsx';
 import {
   openSession, getImage, analyzeByPath, analyzeBatchByPath, runImageOps, makeGraph, getSmallImage,
   getChannelFrames, parseZfile, uploadDat, getBackendLog, parseBackendLog,
-  loadAtb, atbArea, atbUpdate, loadCtb, gphSave, gphLoad,
+  loadAtb, atbArea, atbUpdate, loadCtb, gphSave, gphLoad, renSaveSmDsp,
 } from './api.js';
 
 // ---------------------------------------------------------------------------
@@ -264,6 +265,19 @@ export default function App() {
   const [validation, setValidation] = useState(null);
   const [kin, setKin] = useState(1);
   const [country, setCountry] = useState(0);
+  // Setting Dialogue 状态（1:1 复刻 OLD IDD_S_SET_DLG / SProc.cpp SetSetUp；默认值=WinMain 初始化：
+  // overwrite/DEN/soil 全 TRUE、check_zahyo 全 TRUE、head_size TRUE、Zname_Draw TRUE、m_kyotyo TRUE、
+  // Ztype FALSE、GR FALSE）。Country/offsets/Create1/2 直接参与分析/显示，其余保存待展示层接入。
+  const [settings, setSettings] = useState(() => ({
+    country: 0, format: 0, headerExist: true,
+    drawArea: true, adjustSpeed: false, oldTypeAdjust: false,
+    create1: false, create2: false, uniqueFileName: false,
+    checkZ: Array(25).fill(true),
+    overwrite: Array(32).fill(true),
+    dart1: true, dart2: true,
+    den1to11: Array(11).fill(true), den12to31: true,
+    mouseEmphasis: true,
+  }));
   const [batchStats, setBatchStats] = useState(null); // Statistics 批量结果（Data1）
   const [batchStats2, setBatchStats2] = useState(null); // Statistics 批量结果（Data2）
   const [statDiag, setStatDiag] = useState(null); // Statistics 批量分析诊断（请求/返回/有效/跳过），屏上直接可见
@@ -686,12 +700,33 @@ export default function App() {
       // 屏上诊断：把请求/返回/有效/跳过直接显示在 Statistics 按钮下方，方便定位 1044 不返回等问题
       const diags = [b1?.diag, b2?.diag].filter(Boolean);
       setStatDiag(diags.length ? diags : null);
+
+      // SM_dsp.dat 落盘（复刻 OLD Ren 循环：!GR[0]&&!GR[1] 才写文件——即 Setting Dialogue
+      // 两条日文注释的语义：Create1/2 勾选时结果进图表数据、不进行文件输出）。
+      // 服务端独立重算每券 ALL32 并按 Overwrite/DEN/Dart 勾选写结果列（追加写）。
+      if (!mgInclude1 && !mgInclude2 && datPath1) {
+        try {
+          const r = await renSaveSmDsp({
+            datPath: datPath1, zfilePath, kin, country,
+            overwrite: settings.overwrite.map(Number),
+            den1to11: settings.den1to11.map(Number),
+            den12to31: settings.den12to31,
+            dart1: settings.dart1, dart2: settings.dart2,
+          });
+          pushHistory(`SM_dsp.dat 落盘: ${r.records} records -> ${r.out_path.split(/[\\/]/).pop()}`
+            + (r.failed_records?.length ? `（${r.failed_records.length} 枚失败）` : '')
+            + `（S=${settings.overwrite.filter(Boolean).length}/32 DEN=${settings.den1to11.filter(Boolean).length}/11${settings.den12to31 ? '+12-51' : ''}）`,
+            { module: 'Ren' });
+        } catch (e) {
+          pushHistory(`SM_dsp.dat 落盘失败: ${e.message}`, { level: 'ERROR', module: 'Ren' });
+        }
+      }
     } catch (e) {
       pushHistory(`Statistics 失败: ${e.message}`, { level: 'ERROR', module: 'Statistics', data: { message: e.message } });
     } finally {
       stopBusy();
     }
-  }, [datPath1, datPath2, zfilePath, kin, country, recordCount1, recordCount2, mgInclude1, mgInclude2, pushHistory]);
+  }, [datPath1, datPath2, zfilePath, kin, country, recordCount1, recordCount2, mgInclude1, mgInclude2, pushHistory, settings]);
 
   // ===== P2：图像处理（ImageEngine 算子）=====
   // 复刻 OLD NitiMain + NitiMain2：同一份阈值/算子分别施加到 Data1 / Data2，IR1 / IR2 同步更新
@@ -1137,6 +1172,41 @@ export default function App() {
     })();
   }, [atbSel, sizeNotes, sizeIdx, atbEntryBytes, mousePos, mouseSize, atbTh, threshold, atbAreaIdx, atbWriteEntry]);
 
+  // ---- checkZ 闭环（复刻 ELIA.cpp draw_e：Z 坐标区域黄绿框叠加，checkZ 勾选过滤）----
+  // coordInfo.funcs 由 /api/zfile/parse 返回（已按 checkZ 显示序排列，下标 = settings.checkZ 下标）
+  const [zOverlayNote, setZOverlayNote] = useState(0); // 显示第几张券(note)的区域，默认第 1 张
+
+  const zOverlay = useMemo(() => {
+    const funcs = coordInfo?.funcs;
+    if (!Array.isArray(funcs) || !funcs.length) return [];
+    const rects = [];
+    funcs.forEach((f, idx) => {
+      if (idx >= 25 || !settings.checkZ[idx]) return;
+      const r = f.rows?.[zOverlayNote];
+      if (!r) return;
+      const [x1, y1, x2, y2] = r;
+      if (!x1 && !y1 && !x2 && !y2) return; // OLD draw_e：全 0 不绘制
+      rects.push({
+        x: x1, y: y1, w: x2 - x1, h: y2 - y1,
+        color: 'rgb(240,250,50)', // OLD CreatePen RGB(240,250,50) 黄绿
+        label: f.name,            // OLD func_name（Zname_Draw 时显示）
+      });
+    });
+    return rects;
+  }, [coordInfo, settings.checkZ, zOverlayNote]);
+
+  // zfilePath 变化时自动解析（等价 OLD ReadZFile；Re-Load Coordinate 菜单可手动重跑）
+  useEffect(() => {
+    if (!zfilePath) return;
+    let alive = true;
+    parseZfile({ path: zfilePath })
+      .then((z) => {
+        if (alive) setCoordInfo(z);
+      })
+      .catch(() => { /* 解析失败保持旧 coordInfo，overlay 为空即无害 */ });
+    return () => { alive = false; };
+  }, [zfilePath]);
+
   // Load Size...（复刻 OLD IDC_BUTTON_LOAD_DENOS_SIZE -> LoadCTB：解析 note 尺寸列表）
   const doLoadCtb = useCallback(async (p) => {
     if (!p) return;
@@ -1365,7 +1435,7 @@ export default function App() {
           showGrid={showGrid}
           box={box}
           showBox={!!box}
-          areas={atbOverlay}
+          areas={[...(atbOverlay ?? []), ...zOverlay]}
           onHover={handleMouseHover}
           onClick={handleMouseClick}
           freeHand={mouseShowV}
@@ -1748,26 +1818,31 @@ export default function App() {
         </DialogModal>
       )}
       {activeDialog === 'setting' && (
-        <DialogModal title="Detail Setting" actions={['Apply', 'Cancel']}
-          onAction={(a) => {
-            if (a === 'Apply') {
-              loadImages(record, viewWave);
-              pushHistory(`Detail Setting Applied (R=${redOffset}, G=${grnOffset})`);
-            }
-            setActiveDialog(null);
-          }}
-          onClose={() => setActiveDialog(null)}>
-          <div style={{ display: 'grid', gap: 8 }}>
-            <label>
-              Red Offset:
-              <input type="number" value={redOffset} onChange={(e) => setRedOffset(Number(e.target.value))} style={{ marginLeft: 8, width: 60 }} />
-            </label>
-            <label>
-              Green Offset:
-              <input type="number" value={grnOffset} onChange={(e) => setGrnOffset(Number(e.target.value))} style={{ marginLeft: 8, width: 60 }} />
-            </label>
-            <div style={{ fontSize: 11, color: '#555' }}>Apply 后重新加载当前波段。</div>
-          </div>
+        // Setting→Setting Dialogue（OLD IDM_S_DLG → IDD_S_SET_DLG，SProc.cpp）；右键 Detail Setting、
+        // Country…、Brightness Adjust… 亦打开本对话框
+        <DialogModal title="Setting Dialogue" actions={[]} onClose={() => setActiveDialog(null)}>
+          <SettingDialogueDialog
+            initial={{
+              ...settings, country, redOffset, grnOffset,
+              create1: mgInclude1, create2: mgInclude2,
+            }}
+            onOk={(dft) => {
+              setSettings(dft);
+              setCountry(dft.country);
+              setRedOffset(dft.redOffset);
+              setGrnOffset(dft.grnOffset);
+              setMgInclude1(dft.create1); // OLD global_GR[0]
+              setMgInclude2(dft.create2); // OLD global_GR[1]
+              pushHistory(`Setting Dialogue OK (Country=${COUNTRY_NAMES[dft.country]}, `
+                + `R=${dft.redOffset}, G=${dft.grnOffset}, `
+                + `Overwrite=${dft.overwrite.filter(Boolean).length}/32)`);
+              if (dft.redOffset !== redOffset || dft.grnOffset !== grnOffset) {
+                restoreImage(); // offset 变更需重载当前波段（等价 OLD OK 后 InvalidateRect 重绘）
+              }
+              setActiveDialog(null);
+            }}
+            onCancel={() => setActiveDialog(null)}
+          />
         </DialogModal>
       )}
 

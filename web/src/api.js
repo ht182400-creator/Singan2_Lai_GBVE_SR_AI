@@ -201,7 +201,11 @@ export async function gphLoad({ path }) {
 
 // ============ P4 ATB / VTB / 坐标 ============
 
-// 解析坐标文件 -> { count, areas:[{x1,y1,x2,y2,a_low,a_high,b_low,b_high,area_min}] }
+// 解析坐标文件
+// -> { count, areas:[{x1,y1,x2,y2,a_low,a_high,b_low,b_high,area_min}],
+//      funcs:[{name, rows:[[x1,y1,x2,y2],...]}, ...×25] }
+// funcs 已按 Setting Dialogue「Select Coordinate to be Displayed」(checkZ) 显示序排列，
+// 下标 i 与 settings.checkZ[i] 一一对应（复刻 ZAHYO_READ.CPP 段序 + ELIA.cpp draw_e）。
 export async function parseZfile({ path, encoding = 'shift_jis' }) {
   return postJson('/api/zfile/parse', { path, encoding });
 }
@@ -229,6 +233,20 @@ export async function atbUpdate({ area, entry, bytes }) {
 // -> { path, notes[] }，notes 形如 "Note:001 = 152 x 070"
 export async function loadCtb({ path }) {
   return postJson('/api/atb/ctb', { path });
+}
+
+// SM_dsp.dat 结果落盘（复刻 OLD Ren.cpp Ren + DspOverWrite）：
+// 每券一行 8192B（含头 small 段），按 Setting Dialogue 勾选覆盖结果列（S2/DEN/Dart 大端 u16）。
+// count<=0 = 到文件尾；out_path 缺省 = dat_path 扩展名替换为 SM_dsp.dat（追加写）。
+// -> { written, out_path, records, appended_bytes, existing_bytes, failed_records[] }
+export async function renSaveSmDsp({ datPath, zfilePath, kin = 1, country = 0,
+  startRecord = 0, count = 0, outPath = '',
+  overwrite = [], den1to11 = [], den12to31 = true, dart1 = true, dart2 = true }) {
+  return postJson('/api/ren/sm-dsp', {
+    dat_path: datPath, zfile_path: zfilePath, kin, country,
+    start_record: startRecord, count, out_path: outPath,
+    overwrite, den1to11, den12to31, dart1, dart2,
+  });
 }
 
 // 本地文件浏览（等价 OLD GetOpenFileName；浏览器拿不到本地绝对路径，由 server 代列目录）。

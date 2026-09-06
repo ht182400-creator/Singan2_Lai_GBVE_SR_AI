@@ -20,7 +20,8 @@
 //   POST /api/graph/combine         {a[],b[],mode}
 //   POST /api/graph/save|load       {path[,series]}
 //   -- P4 ATB / VTB / 坐标 --
-//   POST /api/zfile/parse           {path,encoding}                -> {areas[]}
+//   POST /api/ren/sm-dsp            {dat_path,zfile_path,...}      -> SM_dsp.dat 结果落盘（Ren/DspOverWrite）
+//   POST /api/zfile/parse           {path,encoding}                -> {areas[],funcs[]}
 //   POST /api/atb/load              {path}                          -> {isSru,areaNames[],lines[],bytes[]}
 //   POST /api/atb/area              {index}                         -> {lines[],bytes[]}（切 area）
 //   POST /api/atb/update            {area,entry,bytes[8]}           -> 更新条目并整表写回文件
@@ -1971,6 +1972,131 @@ int main(int argc, char** argv) {
                  ",\"series1\":" + j1 + ",\"series2\":" + j2 + "}");
     });
 
+    // ============ Ren SM_dsp.dat 落盘（复刻 OLD Ren.cpp Ren/ComboRen + DspOverWrite）============
+    // OLD 语义：每处理一张券，把含头 small 段(8192B)整行复制进 s_img_stock，再按 Setting Dialogue
+    // 勾选覆盖结果列（S2/DEN/Dart 均先做上下位字节反转=大端落盘，Ren.cpp :82-96），最后追加写文件。
+    // Web 简化：一次批量算完 start_record 起 count 张（count<=0=到文件尾），一次性追加写入。
+    // 行布局（相对含头 small 段，Ren.cpp :141-144 / :112-133 / :100-106）：
+    //   [2096]=Dart1(etc[10])  [2098]=Dart2(etc[11])
+    //   [2184+2(i-12)] i=12..31 与 [2144+2(i-32)] i=32..51 = DEN12..51（"DEN 12-31"勾选同覆盖两段）
+    //   [2224+2(i-1)]  i=1..11  = DEN1..11
+    //   [2352+2(i-1)]  i=1..32  = S2[1..32]（Overwrite S1..S32 逐列勾选）
+    // 注意：DEN 值 OLD 由各国算法(Russia/HongKong 等)写 global_DEN，Web 尚未移植 → 勾选位置写 0。
+    // 写盘时机（OLD）：Ren 循环内 !GR[0]&&!GR[1] 才写（Create1/2 勾选时改存图表数据、不写文件，
+    // 即 Setting Dialogue 两条日文注释的语义）；前端在 Statistics(Calculate all) 完成后按此条件调用。
+    svr.Post("/api/ren/sm-dsp", [](const httplib::Request& req, httplib::Response& res) {
+        std::string dat_path = json_get_str(req.body, "dat_path", "");
+        std::string zfile_path = json_get_str(req.body, "zfile_path", "");
+        int kin = json_get_int(req.body, "kin", 1);
+        int country = json_get_int(req.body, "country", 0);
+        int start_record = json_get_int(req.body, "start_record", 0);
+        int count = json_get_int(req.body, "count", 0);   // <=0 = 到文件尾
+        std::string out_path = json_get_str(req.body, "out_path", "");
+        if (dat_path.empty() || zfile_path.empty()) {
+            send_err(res, 400, "dat_path 与 zfile_path 均必填");
+            return;
+        }
+        try {
+            // 勾选状态（缺省全 1，与 OLD WinMain 初始化一致）
+            std::vector<int> ov = json_parse_int_array(json_get_raw(req.body, "overwrite"));
+            std::vector<int> den11 = json_parse_int_array(json_get_raw(req.body, "den1to11"));
+            const bool denRest = json_get_bool(req.body, "den12to31", true);
+            const bool dart1 = json_get_bool(req.body, "dart1", true);
+            const bool dart2 = json_get_bool(req.body, "dart2", true);
+            bool ovArr[33] = { false };
+            for (int i = 1; i <= 32; i++) ovArr[i] = ((int)ov.size() == 32) ? (ov[i - 1] != 0) : true;
+            bool denArr[52] = { false };
+            for (int i = 1; i <= 11; i++) denArr[i] = ((int)den11.size() == 11) ? (den11[i - 1] != 0) : true;
+            for (int i = 12; i < 52; i++) denArr[i] = denRest;
+
+            auto blocks = singan2::parse_blocks(dat_path);
+            int side_count = 0;
+            for (const auto& b : blocks) if (std::get<1>(b) == 5) side_count++;  // MM1_Side
+            const int record_count = side_count / singan2::WAVE_COUNT;
+            if (start_record < 0) start_record = 0;
+            if (start_record >= record_count) {
+                send_err(res, 400, "start_record 越界: record_count=" + std::to_string(record_count));
+                return;
+            }
+            const int n = count > 0 ? std::min(count, record_count - start_record)
+                                    : record_count - start_record;
+
+            // 输出文件：数据文件名扩展名替换为 SM_dsp.dat（OLD DspOverWrite :41-45）
+            if (out_path.empty()) {
+                std::filesystem::path p(dat_path);
+                out_path = (p.parent_path() / (p.stem().string() + "SM_dsp.dat")).string();
+            }
+
+            const size_t ROW = 8192;  // SMALL_SIZE
+            std::vector<uint8_t> blob;
+            blob.reserve((size_t)n * ROW);
+            std::vector<int> fails;
+            auto t0 = std::chrono::steady_clock::now();
+            for (int k = 0; k < n; k++) {
+                const int rec = start_record + k;
+                std::vector<uint8_t> row = singan2::extract_small_image_raw(dat_path, rec);
+                if (row.empty()) {
+                    fails.push_back(rec);
+                    row.assign(ROW, 0);
+                }
+                std::vector<int> s2, etc;
+                try {
+                    singan2::run_algorithm(dat_path, rec, zfile_path, "", kin, country, s2, etc);
+                } catch (const std::exception& e) {
+                    dbg("WARNING", "ren-sm-dsp", "rec=" + std::to_string(rec)
+                        + " 分析失败=" + e.what() + " 该行结果列写 0");
+                    if (fails.empty() || fails.back() != rec) fails.push_back(rec);
+                    s2.assign(33, 0);
+                    etc.assign(15, 0);
+                }
+                // OLD Ren.cpp :82-96 上下位字节反转后小端 memcpy ≡ 原始值大端落盘
+                auto put_u16 = [&](size_t off, int v) {
+                    const uint16_t x = (uint16_t)(v & 0xFFFF);
+                    row[off] = (uint8_t)(x >> 8);
+                    row[off + 1] = (uint8_t)(x & 0xFF);
+                };
+                if (dart1 && (int)etc.size() > 10) put_u16(2096, etc[10]);
+                if (dart2 && (int)etc.size() > 11) put_u16(2098, etc[11]);
+                for (int i = 12; i < 32; i++) if (denArr[i]) put_u16(2184 + 2 * (i - 12), 0);
+                for (int i = 32; i < 52; i++) if (denArr[i]) put_u16(2144 + 2 * (i - 32), 0);
+                for (int i = 1; i <= 11; i++) if (denArr[i]) put_u16(2224 + 2 * (i - 1), 0);
+                for (int i = 1; i <= 32; i++) if (ovArr[i] && (int)s2.size() > i) put_u16(2352 + 2 * (i - 1), s2[i]);
+                blob.insert(blob.end(), row.begin(), row.end());
+            }
+            auto t1 = std::chrono::steady_clock::now();
+            double elapsed = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            dbg("INFO", "ren-sm-dsp", "写入 records=" + std::to_string(n)
+                + " out=" + out_path + " 失败=" + std::to_string(fails.size())
+                + " elapsed_ms=" + std::to_string(elapsed));
+
+            // 追加写（OLD DspOverWrite：读旧文件 + 拼接 + 写回）
+            std::vector<uint8_t> old;
+            {
+                std::ifstream in(out_path, std::ios::binary);
+                if (in) old.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+            }
+            std::ofstream out(out_path, std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) {
+                send_err(res, 500, "无法写入: " + out_path);
+                return;
+            }
+            if (!old.empty()) out.write(reinterpret_cast<const char*>(old.data()), (std::streamsize)old.size());
+            out.write(reinterpret_cast<const char*>(blob.data()), (std::streamsize)blob.size());
+            out.close();
+
+            std::string fj = "[";
+            for (size_t i = 0; i < fails.size(); i++) { if (i) fj += ","; fj += std::to_string(fails[i]); }
+            fj += "]";
+            send_ok(res, "{\"written\":true,\"out_path\":\"" + json_escape(out_path) +
+                    "\",\"records\":" + std::to_string(n) +
+                    ",\"appended_bytes\":" + std::to_string(blob.size()) +
+                    ",\"existing_bytes\":" + std::to_string(old.size()) +
+                    ",\"failed_records\":" + fj + "}");
+        } catch (const std::exception& e) {
+            send_err(res, 500, e.what());
+        }
+    });
+
     // ============ P4 ATB / VTB / 坐标 ============
     svr.Post("/api/zfile/parse", [](const httplib::Request& req, httplib::Response& res) {
         std::string path = json_get_str(req.body, "path", "");
@@ -1980,6 +2106,9 @@ int main(int argc, char** argv) {
         }
         try {
             auto areas = singan2::parse_zfile(path, json_get_str(req.body, "encoding", "shift_jis"));
+            // Setting Dialogue checkZ 闭环：25 功能段（已按 checkZ 显示序排列，
+            // 下标 i 与 settings.checkZ[i] 一一对应），复刻 ZAHYO_READ.CPP + ELIA.cpp draw_e
+            auto funcs = singan2::parse_zfile_funcs(path);
             std::string body = "{\"path\":\"" + json_escape(path) + "\"";
             body += ",\"count\":" + std::to_string(areas.size()) + ",\"areas\":[";
             for (size_t i = 0; i < areas.size(); i++) {
@@ -1992,6 +2121,19 @@ int main(int argc, char** argv) {
                         ",\"b_low\":" + std::to_string(a.b_low) +
                         ",\"b_high\":" + std::to_string(a.b_high) +
                         ",\"area_min\":" + std::to_string(a.area_min) + "}";
+            }
+            body += "]";
+            body += ",\"funcs\":[";
+            for (size_t i = 0; i < funcs.size(); i++) {
+                if (i) body += ",";
+                body += "{\"name\":\"" + json_escape(funcs[i].name) + "\",\"rows\":[";
+                for (size_t k = 0; k < funcs[i].notes.size(); k++) {
+                    if (k) body += ",";
+                    const auto& r = funcs[i].notes[k];
+                    body += "[" + std::to_string(r.x1) + "," + std::to_string(r.y1) +
+                            "," + std::to_string(r.x2) + "," + std::to_string(r.y2) + "]";
+                }
+                body += "]}";
             }
             body += "]}";
             send_ok(res, body);
