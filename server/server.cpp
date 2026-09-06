@@ -2034,7 +2034,7 @@ int main(int argc, char** argv) {
             auto t0 = std::chrono::steady_clock::now();
             for (int k = 0; k < n; k++) {
                 const int rec = start_record + k;
-                std::vector<uint8_t> row = singan2::extract_small_image_raw(dat_path, rec);
+                std::vector<uint8_t> row = singan2::extract_small_image(dat_path, rec);
                 if (row.empty()) {
                     fails.push_back(rec);
                     row.assign(ROW, 0);
