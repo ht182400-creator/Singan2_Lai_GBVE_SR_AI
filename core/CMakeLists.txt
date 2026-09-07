@@ -7,6 +7,14 @@ add_library(singan2_core
   src/c_si2.cpp
   src/all32.cpp
   src/algo.cpp
+  src/country/country_registry.cpp
+  src/country/countries/euro.cpp
+  src/country/countries/singa_swiss_poland.cpp
+  src/country/countries/malaysia.cpp
+  src/country/countries/taiwan.cpp
+  src/country/countries/etc.cpp
+  src/country/countries/canada.cpp
+  src/country/countries/_stubs_pending.cpp
 )
 
 target_include_directories(singan2_core PUBLIC

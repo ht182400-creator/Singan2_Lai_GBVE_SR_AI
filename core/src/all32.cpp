@@ -1,24 +1,18 @@
 // all32.cpp — All32Engine 实现，复刻 all32.py run()
 #include "singan2/all32.h"
+#include "singan2/country_context.h"
 
 #include <algorithm>
 #include <stdexcept>
 
 namespace singan2 {
-namespace {
-
-std::vector<int64_t> to_i64(const std::vector<uint16_t>& v) {
-    std::vector<int64_t> r(v.size());
-    for (size_t k = 0; k < v.size(); k++) r[k] = v[k];
-    return r;
-}
-
-}  // namespace
 
 All32Engine::All32Engine(ImageEngine* engine, const ZAHYO_PARAM* zparam, int kin_, bool ztype_,
-                         const std::vector<uint8_t>* small, int select_country)
+                         const std::vector<uint8_t>* small, int select_country,
+                         std::vector<int>* den_accum)
     : eng(engine), zp(zparam), kin(kin_), ztype(ztype_), country(select_country),
-      s2(33, 0), etc(15, 0), csi2_(engine, zparam, kin_, ztype_, small) {
+      small(small), s2(33, 0), etc(15, 0), den(52, 0), den_accum(den_accum),
+      csi2_(engine, zparam, kin_, ztype_, small) {
     csi2_.s2 = &s2;
 }
 
@@ -214,7 +208,20 @@ void All32Engine::run() {
         s2[11] = ct & 0xffff;
     }
 
-    // S2[17..32] 国家专用（TODO，保持 0）
+    // S2[17..32] 国家专用（复刻 OLD ALL32 switch(global_SelectCountry) → 各国 cpp）
+    {
+        CountryCtx cctx;
+        cctx.eng = eng;
+        cctx.zp = zp;
+        cctx.kin = kin;
+        cctx.country = country;
+        cctx.small = small;
+        cctx.s2 = &s2;
+        cctx.etc = &etc;
+        cctx.den = &den;
+        cctx.csi2 = &csi2_;
+        run_country(country, cctx);
+    }
 
     etc[11] = csi2_.soil_soil() & 0xffff;
 }

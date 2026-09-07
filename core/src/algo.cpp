@@ -13,7 +13,8 @@ namespace singan2 {
 void run_algorithm(const std::string& dat_path, int record,
                    const std::string& zfile_path, const std::string& wtable_path,
                    int kin, int country,
-                   std::vector<int>& s2_out, std::vector<int>& etc_out) {
+                   std::vector<int>& s2_out, std::vector<int>& etc_out,
+                   std::vector<int>* den_accum) {
     // 1) 提取单面 213096 字节
     std::vector<uint8_t> onedat;
     try {
@@ -42,7 +43,7 @@ void run_algorithm(const std::string& dat_path, int record,
     ZAHYO_PARAM zp = parse_zahyo_param(zfile_path);
 
     // 7) ALL32 主流程
-    All32Engine all(&eng, &zp, kin, false, &small, country);
+    All32Engine all(&eng, &zp, kin, false, &small, country, den_accum);
     all.run();
 
     s2_out = std::move(all.s2);

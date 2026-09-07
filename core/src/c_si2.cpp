@@ -339,4 +339,110 @@ int C_SI2::soil_soil() {
     }
 }
 
+// ---- 国家函数用（复刻 OLD C_SI2.CPP，供 countries/ 各国移植调用）----
+
+// OLD C_SI2.CPP :243-289。Ave=(sum*w_Table[ct])>>14；
+// 区域 (y,xx]×(x,xx]：内层 (y,yy-1)×(x,xx-1) 用像素值，边缘用 0 参与分散。
+int C_SI2::distribution2(int x, int y, int xx, int yy, const std::vector<int64_t>& img,
+                         int sum, int ct, int /*type*/) {
+    adjust(x, y, xx, yy, x, y, xx, yy);
+    const int w_speed = (eng && ct >= 0 && ct < static_cast<int>(eng->w_table->table.size()))
+                            ? static_cast<int>(eng->w_table->table[ct]) : 0;
+    const uint64_t ave = (static_cast<uint64_t>(sum) * static_cast<uint64_t>(w_speed)) >> 14;
+    int i0, i1, j0, j1;
+    const bool in = bounds(y, yy + 1, x, xx + 1, i0, i1, j0, j1);  // (y,xx]×(x,xx]
+    uint64_t b = 0;
+    if (in) {
+        for (int i = i0; i <= i1; i++) {
+            for (int j = j0; j <= j1; j++) {
+                if (i > y && i < yy - 1 && j > x && j < xx - 1)
+                    b += static_cast<uint64_t>(img[i * X_SIZE + j] - static_cast<int64_t>(ave)) *
+                         static_cast<uint64_t>(img[i * X_SIZE + j] - static_cast<int64_t>(ave));
+                else
+                    b += ave * ave;  // OLD: (0-Ave)^2（Ave>=0）
+            }
+        }
+    }
+    return static_cast<int>(b >> 8);  // OLD :286 无封顶，返回 ULONG
+}
+
+// OLD C_SI2.CPP :350-418。区域取自 Sukasi2；空区域→默认 1..19。
+// 1:1 注意：OLD 的 im 缓冲不清尾（memset Y_SIZE*X_SIZE），且比较循环含 im[ii+1] 越界读；
+// 这里等价实现（ii+1 越界处按 0 处理）。
+int C_SI2::wave_type(int /*i*/, int /*j*/, const std::vector<int64_t>& img, int /*num*/) {
+    if (!zp) throw std::runtime_error("wave_type 需要 zp");
+    const int rx = zp->at("Sukasi2", "RightX", kin);
+    const int ry = zp->at("Sukasi2", "RightY", kin);
+    std::vector<uint8_t> im(static_cast<size_t>(Y_SIZE) * X_SIZE, 0);
+    if (rx && ry) {
+        const int ly = zp->at("Sukasi2", "LeftY", kin);
+        const int lx = zp->at("Sukasi2", "LeftX", kin);
+        for (int i = 0; i < Y_SIZE; i++)
+            for (int j = 0; j < X_SIZE; j++)
+                if (i > ly && i < ry - 1 && j > lx && j < rx - 1)
+                    im[i * X_SIZE + j] = static_cast<uint8_t>(img[i * X_SIZE + j]);
+    } else {
+        for (int i = 0; i < Y_SIZE; i++)
+            for (int j = 0; j < X_SIZE; j++)
+                if (i > 0 && i < 19 && j > 0 && j < 19)
+                    im[i * X_SIZE + j] = static_cast<uint8_t>(img[i * X_SIZE + j]);
+    }
+    int ct = 0;
+    for (int ii = 0; ii < static_cast<int>(im.size()) - 1; ii++)
+        if (im[ii] == 255 && im[ii + 1] == 0) ct++;
+    return ct;
+}
+
+// OLD C_SI2.CPP :480-547。0xff-像素，>0xd0 部分累加；区域 [y,yy-1]×[x,xx-1]；
+// 空(c=0)→默认 20×20（同一张图）；封顶 65535。
+int C_SI2::horo2(int x, int y, int xx, int yy, const std::vector<int64_t>& img) {
+    adjust(x, y, xx, yy, x, y, xx, yy);
+    int i0, i1, j0, j1;
+    int64_t sum = 0;
+    if (bounds(y - 1, yy, x - 1, xx, i0, i1, j0, j1)) {
+        for (int i = i0; i <= i1; i++)
+            for (int j = j0; j <= j1; j++) {
+                int dat = 0xff - static_cast<int>(img[i * X_SIZE + j]);
+                if (dat > 0xd0) { dat -= 0xd0; sum += dat; }
+            }
+    } else {
+        for (int i = 0; i < 20; i++)
+            for (int j = 0; j < 20; j++) {
+                int dat = 0xff - static_cast<int>(img[i * X_SIZE + j]);
+                if (dat > 0xd0) { dat -= 0xd0; sum += dat; }
+            }
+    }
+    return static_cast<int>(sum > 65535 ? 65535 : sum);
+}
+
+// OLD C_SI2.CPP :549-588。low<像素<high 计数；区域 [y,yy-1]×[x,xx-1]；无封顶。
+int C_SI2::horo3(int x, int y, int xx, int yy, const std::vector<int64_t>& img, int low, int high) {
+    adjust(x, y, xx, yy, x, y, xx, yy);
+    int i0, i1, j0, j1;
+    int64_t sum = 0;
+    if (bounds(y - 1, yy, x - 1, xx, i0, i1, j0, j1)) {
+        for (int i = i0; i <= i1; i++)
+            for (int j = j0; j <= j1; j++) {
+                const int dat = static_cast<int>(img[i * X_SIZE + j]);
+                if (dat > low && dat < high) sum++;
+            }
+    }
+    return static_cast<int>(sum > 65535 ? 65535 : sum);
+}
+
+// OLD C_SI2.CPP :590-629。low<=像素<=high 计数；区域 [y,yy-1]×[x,xx-1]；封顶 65535。
+int C_SI2::horo4(int x, int y, int xx, int yy, const std::vector<int64_t>& img, int low, int high) {
+    adjust(x, y, xx, yy, x, y, xx, yy);
+    int i0, i1, j0, j1;
+    int64_t sum = 0;
+    if (bounds(y - 1, yy, x - 1, xx, i0, i1, j0, j1)) {
+        for (int i = i0; i <= i1; i++)
+            for (int j = j0; j <= j1; j++) {
+                const int dat = static_cast<int>(img[i * X_SIZE + j]);
+                if (dat >= low && dat <= high) sum++;
+            }
+    }
+    return static_cast<int>(sum > 65535 ? 65535 : sum);
+}
+
 }  // namespace singan2

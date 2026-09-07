@@ -36,6 +36,19 @@ public:
     int soil2_(int x, int y, int xx, int yy, const std::vector<int64_t>& img);
     int soil_soil();
 
+    // ---- 国家函数用（复刻 OLD C_SI2.CPP，供 countries/ 各国移植调用）----
+    // 波形数（白→黑变化次数）；区域取自 zp 的 Sukasi2（空区域→默认 1..19）
+    int wave_type(int i, int j, const std::vector<int64_t>& img, int num);
+    // 波形红外分散（Ave=(sum*w_Table[ct])>>14，区域 (y,xx]×(x,xx]）
+    int distribution2(int x, int y, int xx, int yy, const std::vector<int64_t>& img,
+                      int sum, int ct, int type);
+    // 全息 1：0xff-像素，>0xd0 部分累加；空区域→默认 20×20；封顶 65535
+    int horo2(int x, int y, int xx, int yy, const std::vector<int64_t>& img);
+    // 全息 2：low<像素<high 计数（无默认分支、无封顶）
+    int horo3(int x, int y, int xx, int yy, const std::vector<int64_t>& img, int low, int high);
+    // 全息 3：low<=像素<=high 计数（无默认分支；封顶 65535）
+    int horo4(int x, int y, int xx, int yy, const std::vector<int64_t>& img, int low, int high);
+
 private:
     // 模拟 C++ 区域条件 i>y_lo && i<y_hi && j>x_lo && j<x_hi，返回闭区间 [i0,i1]x[j0,j1]
     static bool bounds(int y_lo, int y_hi, int x_lo, int x_hi,

@@ -2031,6 +2031,7 @@ int main(int argc, char** argv) {
             std::vector<uint8_t> blob;
             blob.reserve((size_t)n * ROW);
             std::vector<int> fails;
+            std::vector<int> den(52, 0);  // DEN 全局累积（OLD：Ren 循环内跨 record 保留，Russia 等有 +=）
             auto t0 = std::chrono::steady_clock::now();
             for (int k = 0; k < n; k++) {
                 const int rec = start_record + k;
@@ -2041,7 +2042,7 @@ int main(int argc, char** argv) {
                 }
                 std::vector<int> s2, etc;
                 try {
-                    singan2::run_algorithm(dat_path, rec, zfile_path, "", kin, country, s2, etc);
+                    singan2::run_algorithm(dat_path, rec, zfile_path, "", kin, country, s2, etc, &den);
                 } catch (const std::exception& e) {
                     dbg("WARNING", "ren-sm-dsp", "rec=" + std::to_string(rec)
                         + " 分析失败=" + e.what() + " 该行结果列写 0");
@@ -2057,9 +2058,9 @@ int main(int argc, char** argv) {
                 };
                 if (dart1 && (int)etc.size() > 10) put_u16(2096, etc[10]);
                 if (dart2 && (int)etc.size() > 11) put_u16(2098, etc[11]);
-                for (int i = 12; i < 32; i++) if (denArr[i]) put_u16(2184 + 2 * (i - 12), 0);
-                for (int i = 32; i < 52; i++) if (denArr[i]) put_u16(2144 + 2 * (i - 32), 0);
-                for (int i = 1; i <= 11; i++) if (denArr[i]) put_u16(2224 + 2 * (i - 1), 0);
+                for (int i = 12; i < 32; i++) if (denArr[i] && (int)den.size() > i) put_u16(2184 + 2 * (i - 12), den[i]);
+                for (int i = 32; i < 52; i++) if (denArr[i] && (int)den.size() > i) put_u16(2144 + 2 * (i - 32), den[i]);
+                for (int i = 1; i <= 11; i++) if (denArr[i] && (int)den.size() > i) put_u16(2224 + 2 * (i - 1), den[i]);
                 for (int i = 1; i <= 32; i++) if (ovArr[i] && (int)s2.size() > i) put_u16(2352 + 2 * (i - 1), s2[i]);
                 blob.insert(blob.end(), row.begin(), row.end());
             }
